@@ -1,0 +1,8 @@
+{
+    "adapter": "github",
+    "options": {
+        "token": "{{env.GITHUB_TOKEN}}",
+        "isOrg": true,
+        "owner": "norantec"
+    }
+}
