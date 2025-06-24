@@ -51,17 +51,28 @@ export class HerbalController {
     @Post('*')
     private async handler(@Req() request: Request, @Body() input: unknown): Promise<HttpResponseBody<any>> {
         const methodHandler: MethodHandler<z.Schema<any>, z.Schema<any>> = this[request?.methodName];
-        if (typeof methodHandler === 'function') {
-            return {
-                data: await methodHandler(request, input, HeaderUtil.parse(request.headers ?? {})).then(
-                    (response) => response?.response,
-                ),
-                token: StringUtil.isFalsyString(request?.authenticateResult?.nextToken)
-                    ? null
-                    : request.authenticateResult!.nextToken!,
-            };
-        } else {
-            throw new NotFoundException();
+        try {
+            if (typeof methodHandler === 'function') {
+                const result = {
+                    data: await methodHandler(request, input, HeaderUtil.parse(request.headers ?? {})).then(
+                        (response) => response?.response,
+                    ),
+                    token: StringUtil.isFalsyString(request?.authenticateResult?.nextToken)
+                        ? null
+                        : request.authenticateResult!.nextToken!,
+                };
+                try {
+                    await request?.transaction?.commit?.();
+                } catch {}
+                return result;
+            } else {
+                try {
+                    await request?.transaction?.rollback?.();
+                } catch {}
+                throw new NotFoundException();
+            }
+        } catch (error) {
+            throw error;
         }
     }
 }

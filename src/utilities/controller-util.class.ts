@@ -15,6 +15,7 @@ import { AuthAdapters } from '../decorators/auth-adapter.decorator';
 import { Observable, throwError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { LoggerService } from '../modules/logger/logger.service';
+import { Sequelize } from 'sequelize-typescript';
 
 const IS_CONTROLLER = Symbol();
 
@@ -81,11 +82,16 @@ class HerbalGuard implements CanActivate {
 
     public async canActivate(context: ExecutionContext): Promise<boolean> {
         const traceId = uuidv4();
+        const transaction = await this.ref
+            ?.get?.(Sequelize, { strict: false })
+            ?.transaction?.()
+            ?.catch(() => Promise.resolve(undefined));
         const request: Request = context.switchToHttp().getRequest();
         const response: Response = context.switchToHttp().getResponse();
 
         request.traceId = traceId;
         request.methodName = request.url.split('/').pop()!;
+        request.transaction = transaction;
         response.setHeader(HEADERS.TRACE_ID, traceId);
 
         const authAdapters = AuthAdapters.getAdapters(context?.getClass?.()?.prototype, request.methodName);
