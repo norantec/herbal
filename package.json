@@ -34,9 +34,10 @@
     "dependencies": {
         "@nestjs/common": "^10.0.0",
         "@nestjs/core": "^10.4.19",
-        "@open-norantec/forge": "^1.0.0-alpha.5",
+        "@open-norantec/forge": "^1.0.0-alpha.7",
         "@open-norantec/utilities": "^1.0.0-alpha.18",
         "@types/express": "^4.17.23",
+        "commander": "^12.1.0",
         "lodash": "^4.17.21",
         "nest-winston": "^1.10.2",
         "nj-request-scope": "^1.0.10",
