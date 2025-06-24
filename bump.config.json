@@ -1,8 +1,6 @@
 {
-    "adapter": "github",
+    "adapter": "npm",
     "options": {
-        "token": "{{env.GITHUB_TOKEN}}",
-        "isOrg": true,
-        "owner": "norantec"
+        "token": "{{env.NPM_TOKEN}}"
     }
 }
