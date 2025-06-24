@@ -1,69 +1,74 @@
 import * as ts from 'typescript';
-import { Project, CompilerOptions, SourceFile, Signature } from 'ts-morph';
-import { StringUtil } from '@open-norantec/utilities/dist/string-util.class';
 
 export const DECORATOR_NAME_PREFIX = 'Φnt:method:';
 
 export default function transformer(program: ts.Program): ts.TransformerFactory<ts.SourceFile> {
-    const project = new Project({
-        compilerOptions: program.getCompilerOptions() as CompilerOptions,
-    });
+    const checker = program.getTypeChecker();
 
     return () => {
-        return (sourceFile) => {
-            const filePath = sourceFile.fileName;
-            const patchSourceFile = project.addSourceFileAtPathIfExists(filePath);
+        return (sourceFile: ts.SourceFile): ts.SourceFile => {
+            const newStatements: ts.Statement[] = [];
 
-            if (!(patchSourceFile instanceof SourceFile)) return sourceFile;
+            const visitNode = (node: ts.Node) => {
+                if (ts.isClassDeclaration(node) && node.name) {
+                    const className = node.name.text;
 
-            const statements: ts.Statement[] = [];
+                    for (const member of node.members) {
+                        if (!ts.isPropertyDeclaration(member) || !member.name) continue;
+                        if (!ts.isIdentifier(member.name)) continue;
 
-            for (const cls of patchSourceFile.getClasses()) {
-                const className = cls.getName();
+                        const propName = member.name.text;
+                        const symbol = checker.getSymbolAtLocation(member.name);
 
-                if (StringUtil.isFalsyString(className)) continue;
+                        if (!symbol) continue;
 
-                for (const prop of cls.getProperties()) {
-                    const name = prop.getName();
-                    const type = prop.getType();
+                        const type = checker.getTypeOfSymbolAtLocation(symbol, member);
+                        const callSignatures = type.getCallSignatures();
 
-                    const callSignature = type.getCallSignatures()[0];
-                    if (!(callSignature instanceof Signature)) continue;
+                        if (callSignatures.length === 0) continue;
 
-                    const returnType = callSignature.getReturnType();
-                    let actualReturn = returnType;
+                        const returnType = callSignatures[0].getReturnType();
+                        let actualType = returnType;
 
-                    if (returnType.getSymbol()?.getName?.() === 'Promise') {
-                        const args = returnType.getTypeArguments();
-                        if (args.length > 0) {
-                            actualReturn = args[0];
+                        if (returnType.symbol?.getName() === 'Promise') {
+                            const typeArgs = (returnType as ts.TypeReference).typeArguments;
+                            if (typeArgs && typeArgs.length > 0) {
+                                actualType = typeArgs[0];
+                            }
                         }
-                    }
 
-                    const typeStr = actualReturn.getText();
+                        const actualTypeStr = checker.typeToString(
+                            actualType,
+                            undefined,
+                            ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.UseFullyQualifiedType,
+                        );
+                        if (!actualTypeStr || actualTypeStr === 'void' || actualTypeStr === 'any') continue;
 
-                    if (StringUtil.isFalsyString(typeStr)) continue;
-
-                    statements.push(
-                        ts.factory.createExpressionStatement(
-                            ts.factory.createCallExpression(
-                                ts.factory.createIdentifier('Reflect.defineMetadata'),
-                                undefined,
-                                [
-                                    ts.factory.createStringLiteral(`${DECORATOR_NAME_PREFIX}${name}`),
-                                    ts.factory.createStringLiteral(typeStr),
-                                    ts.factory.createPropertyAccessExpression(
-                                        ts.factory.createIdentifier(className!),
-                                        ts.factory.createIdentifier('prototype'),
-                                    ),
-                                ],
+                        newStatements.push(
+                            ts.factory.createExpressionStatement(
+                                ts.factory.createCallExpression(
+                                    ts.factory.createIdentifier('Reflect.defineMetadata'),
+                                    undefined,
+                                    [
+                                        ts.factory.createStringLiteral(`${DECORATOR_NAME_PREFIX}${propName}`),
+                                        ts.factory.createStringLiteral(actualTypeStr),
+                                        ts.factory.createPropertyAccessExpression(
+                                            ts.factory.createIdentifier(className),
+                                            ts.factory.createIdentifier('prototype'),
+                                        ),
+                                    ],
+                                ),
                             ),
-                        ),
-                    );
+                        );
+                    }
                 }
-            }
 
-            return ts.factory.updateSourceFile(sourceFile, [...sourceFile.statements, ...statements]);
+                ts.forEachChild(node, visitNode);
+            };
+
+            ts.forEachChild(sourceFile, visitNode);
+
+            return ts.factory.updateSourceFile(sourceFile, [...sourceFile.statements, ...newStatements]);
         };
     };
 }

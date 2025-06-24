@@ -117,6 +117,7 @@ command
         createForgeCommand({
             getEntryFileContent,
             hideOptions: ['--after-emit-action', '--esbuild'],
+            esbuild: false,
             afterEmitAction: 'none',
         }).name('build'),
     )
@@ -124,6 +125,7 @@ command
         createForgeCommand({
             getEntryFileContent,
             hideOptions: ['--after-emit-action', '--esbuild'],
+            esbuild: false,
             afterEmitAction: 'watch',
         }).name('watch'),
     )
