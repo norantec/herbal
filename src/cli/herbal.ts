@@ -134,3 +134,5 @@ command
             afterEmitAction: 'run-once',
         }).name('generate-client'),
     );
+
+command.parse(process.argv);
