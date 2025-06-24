@@ -16,7 +16,6 @@ command
     .option('--ts-project', 'Path for TypeScript config file', 'tsconfig.json')
     .option('--debug', 'Debug mode', false)
     .action((type, entry, options) => {
-        console.log(type, entry, options);
         new Builder({
             entry,
             ..._.omit(options, ['debug']),

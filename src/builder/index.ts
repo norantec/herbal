@@ -13,7 +13,7 @@ import * as memfs from 'memfs';
 import { Worker } from 'node:worker_threads';
 import * as chokidar from 'chokidar';
 import * as ignore from 'ignore';
-import WebpackBarPlugin from 'webpackbar';
+const WebpackBarPlugin = require('webpackbar');
 
 class CatchNotFoundPlugin {
     public constructor(private logger?: winston.Logger) {}
