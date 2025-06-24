@@ -16,32 +16,19 @@ import * as ignore from 'ignore';
 import * as readline from 'node:readline';
 import * as chalk from 'chalk';
 
-class ProgressPlugin {
-    apply(compiler) {
-        // 使用官方 ProgressPlugin 获取进度
-        new webpack.ProgressPlugin((percentage, message, ...args) => {
-            const percent = Math.floor(percentage * 100);
-            const file = args[0] || '';
+function renderProgressBar(percent, message, file) {
+    const barLength = 40;
+    const filledLength = Math.round((percent / 100) * barLength);
+    const bar = `${'█'.repeat(filledLength)}${'-'.repeat(barLength - filledLength)}`;
 
-            // 渲染进度条
-            ProgressPlugin.renderProgressBar(percent, message, file);
-        }).apply(compiler);
-    }
+    readline.clearLine(process.stdout, 0);
+    readline.cursorTo(process.stdout, 0);
+    process.stdout.write(
+        `${chalk.green(`[${bar}]`)} ${chalk.yellow(`${percent}%`)} ${chalk.gray(message)} ${chalk.cyan(file)}`,
+    );
 
-    static renderProgressBar(percent, message, file) {
-        const barLength = 40;
-        const filledLength = Math.round((percent / 100) * barLength);
-        const bar = `${'█'.repeat(filledLength)}${'-'.repeat(barLength - filledLength)}`;
-
-        readline.clearLine(process.stdout, 0);
-        readline.cursorTo(process.stdout, 0);
-        process.stdout.write(
-            `${chalk.green(`[${bar}]`)} ${chalk.yellow(`${percent}%`)} ${chalk.gray(message)} ${chalk.cyan(file)}`,
-        );
-
-        if (percent === 100) {
-            process.stdout.write('\n');
-        }
+    if (percent === 100) {
+        process.stdout.write('\n');
     }
 }
 
@@ -415,7 +402,9 @@ export class Builder {
                 ],
             },
             plugins: [
-                new ProgressPlugin(),
+                new webpack.ProgressPlugin((percentage, message, ...args) => {
+                    renderProgressBar(Math.floor(percentage * 100), message, args[0] || '');
+                }),
                 ...(() => {
                     const result: any[] = [];
 
@@ -496,25 +485,28 @@ export class Builder {
                                             "import * as fs from 'node:fs';",
                                             "import * as path from 'node:path';",
                                             '\nasync function bootstrap() {',
-                                            `    const absoluteOutputFilePath = '${this.outputPath}';`,
+                                            `    const outputDirPath = '${this.outputPath}';`,
+                                            `    const outputFilePath = path.resolve(outputDirPath, '${this.options.outputName}.ts');`,
                                             '    await ENTRY?.options?.onBeforeBootstrap?.();',
                                             '    try {',
-                                            '        fs.rmSync(absoluteOutputFilePath, {',
+                                            '        fs.rmSync(outputFilePath, {',
                                             '            recursive: true,',
                                             '            force: true,',
                                             '        });',
                                             '    } catch {}',
                                             '    try {',
-                                            '        if (!fs.statSync(path.dirname(absoluteOutputFilePath)).isDirectory()) {',
-                                            '            fs.rmSync(path.dirname(absoluteOutputFilePath), {',
+                                            '        if (!fs.statSync(path.dirname(outputDirPath)).isDirectory()) {',
+                                            '            fs.rmSync(path.dirname(outputDirPath), {',
                                             '                recursive: true,',
                                             '                force: true,',
                                             '            });',
                                             '        }',
-                                            '        fs.mkdirSync(path.dirname(absoluteOutputFilePath), { recursive: true });',
+                                            '    } catch {}',
+                                            '    try {',
+                                            '        fs.mkdirSync(outputDirPath, { recursive: true });',
                                             '    } catch {}',
                                             '    fs.writeFileSync(',
-                                            `        path.resolve(absoluteOutputFilePath, '${this.options.outputName}.ts'),`,
+                                            '        outputFilePath,',
                                             '        ENTRY?.generateClientSourceFile?.({',
                                             '            Module: ENTRY?.options?.Module,',
                                             '        }),',
