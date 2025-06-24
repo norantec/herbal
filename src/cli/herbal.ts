@@ -1,27 +1,115 @@
 #!/usr/bin/env node
 
-import * as _ from 'lodash';
-import { Command } from 'commander';
-import { Builder, BuilderOptions } from '../builder';
+import { createForgeCommand } from '@open-norantec/forge';
 
-const command = new Command('herbal');
-
-command
-    .argument('<type>', 'Run type, e.g. build/client/watch')
-    .argument('<entry>', 'Entry path relative to work-dir and source-dir, e.g. main.ts')
-    .option('--clean', 'Clean legacy output', true)
-    .option('--work-dir <string>', 'Work directory path', process.cwd())
-    .option('--source-dir <string>', 'Source directory path', 'src')
-    .option('--output-dir <string>', 'Output directory path', 'dist')
-    .option('--output-name <string>', 'Output file name', 'main')
-    .option('--output-name-format <string>', 'Ouptput file name format', '[name].js')
-    .option('--ts-project <string>', 'Path for TypeScript config file', 'tsconfig.json')
-    .option('--debug', 'Debug mode', false)
-    .action((type, entry, options) => {
-        new Builder({
-            entry,
-            ..._.omit(options, ['debug']),
-        } as unknown as BuilderOptions).run(type, options?.debug ?? false);
-    });
-
-command.parse(process.argv);
+createForgeCommand({
+    getEntryFileContent: ({ afterEmitAction, entryFilePath, options, outputPath }) => {
+        switch (afterEmitAction) {
+            case 'none':
+            case 'watch':
+            case 'compile': {
+                return [
+                    "import 'reflect-metadata';",
+                    "import { NestFactory } from '@nestjs/core';",
+                    "import { ModelUtil } from '@open-norantec/herbal/dist/utilities/model-util.class';",
+                    "import { LoggerService } from '@open-norantec/herbal/dist/modules/logger/logger.service';",
+                    `import ENTRY from '${entryFilePath}';`,
+                    '\nasync function bootstrap() {',
+                    '    const entryOptions = ENTRY?.options;',
+                    '    await entryOptions?.onBeforeBootstrap?.();',
+                    '    const app = await NestFactory.create(entryOptions?.Module, {',
+                    '        ...entryOptions?.factoryOptions,',
+                    '    });',
+                    '',
+                    '    if (entryOptions?.cors !== false) {',
+                    '        app.enableCors({',
+                    "            origin: '*',",
+                    "            methods: '*',",
+                    "            allowedHeaders: '*',",
+                    '            credentials: false,',
+                    '            ...(entryOptions?.cors ?? {}),',
+                    '        });',
+                    '    }',
+                    '',
+                    '    if (Array.isArray(entryOptions?.globalFilters) && entryOptions?.globalFilters?.length > 0) {',
+                    '        app.useGlobalFilters(entryOptions?.globalFilters);',
+                    '    }',
+                    '',
+                    '    if (Array.isArray(entryOptions?.globalGuards) && entryOptions?.globalGuards?.length > 0) {',
+                    '        app.useGlobalFilters(entryOptions?.globalGuards);',
+                    '    }',
+                    '',
+                    '    if (Array.isArray(entryOptions?.globalInterceptors) && entryOptions?.globalInterceptors?.length > 0) {',
+                    '        app.useGlobalFilters(entryOptions?.globalInterceptors);',
+                    '    }',
+                    '',
+                    '    if (Array.isArray(entryOptions?.globalPipes) && entryOptions?.globalPipes?.length > 0) {',
+                    '        app.useGlobalFilters(entryOptions?.globalPipes);',
+                    '    }',
+                    '',
+                    '    if (!!entryOptions?.websocketAdapter) {',
+                    '        app.useWebsocketAdapter(entryOptions?.useWebsocketAdapter);',
+                    '    }',
+                    '',
+                    '    if (Array.isArray(entryOptions?.uses)) {',
+                    '        entryOptions.uses.forEach((middleware) => {',
+                    '            app.use(middleware);',
+                    '        });',
+                    '    }',
+                    '',
+                    '    const resolver = (Class) => app.resolve(Class);',
+                    '    const listenPort = await entryOptions?.getListenPort?.(resolver);',
+                    '    const loggerService = await app.resolve(LoggerService);',
+                    '    const finalListenPort = listenPort > 0 ? listenPort : 8080;',
+                    '',
+                    '    await entryOptions?.onBeforeListen?.(app);',
+                    '    await app.listen(finalListenPort, () => {',
+                    '        loggerService.log(`Listening on port: ${finalListenPort}`);',
+                    '        entryOptions?.callback?.(resolver);',
+                    '    });',
+                    '}',
+                    '\nbootstrap();',
+                ].join('\n');
+            }
+            case 'run-once': {
+                return [
+                    "import 'reflect-metadata';",
+                    `import ENTRY from '${entryFilePath}';`,
+                    "import * as fs from 'node:fs';",
+                    "import * as path from 'node:path';",
+                    '\nasync function bootstrap() {',
+                    `    const outputDirPath = '${outputPath}';`,
+                    `    const outputFilePath = path.resolve(outputDirPath, '${options.outputName}.ts');`,
+                    '    await ENTRY?.options?.onBeforeBootstrap?.();',
+                    '    try {',
+                    '        fs.rmSync(outputFilePath, {',
+                    '            recursive: true,',
+                    '            force: true,',
+                    '        });',
+                    '    } catch {}',
+                    '    try {',
+                    '        if (!fs.statSync(path.dirname(outputDirPath)).isDirectory()) {',
+                    '            fs.rmSync(path.dirname(outputDirPath), {',
+                    '                recursive: true,',
+                    '                force: true,',
+                    '            });',
+                    '        }',
+                    '    } catch {}',
+                    '    try {',
+                    '        fs.mkdirSync(outputDirPath, { recursive: true });',
+                    '    } catch {}',
+                    '    fs.writeFileSync(',
+                    '        outputFilePath,',
+                    '        ENTRY?.generateClientSourceFile?.({',
+                    '            Module: ENTRY?.options?.Module,',
+                    '        }),',
+                    '    );',
+                    '}',
+                    '\nbootstrap();',
+                ].join('\n');
+            }
+        }
+    },
+})
+    .name('herbal')
+    .parse(process.argv);
