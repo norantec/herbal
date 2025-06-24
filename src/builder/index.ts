@@ -13,6 +13,7 @@ import * as memfs from 'memfs';
 import { Worker } from 'node:worker_threads';
 import * as chokidar from 'chokidar';
 import * as ignore from 'ignore';
+import WebpackBarPlugin from 'webpackbar';
 
 class CatchNotFoundPlugin {
     public constructor(private logger?: winston.Logger) {}
@@ -384,6 +385,9 @@ export class Builder {
                 ],
             },
             plugins: [
+                new WebpackBarPlugin({
+                    name: type,
+                }),
                 ...(() => {
                     const result: any[] = [];
 
