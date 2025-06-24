@@ -116,21 +116,22 @@ command
     .addCommand(
         createForgeCommand({
             getEntryFileContent,
-            hideOptions: ['--after-emit-action'],
+            hideOptions: ['--after-emit-action', '--esbuild'],
             afterEmitAction: 'none',
         }).name('build'),
     )
     .addCommand(
         createForgeCommand({
             getEntryFileContent,
-            hideOptions: ['--after-emit-action'],
+            hideOptions: ['--after-emit-action', '--esbuild'],
             afterEmitAction: 'watch',
         }).name('watch'),
     )
     .addCommand(
         createForgeCommand({
             getEntryFileContent: getGenerateClientEntryFileContent,
-            hideOptions: ['--after-emit-action'],
+            hideOptions: ['--after-emit-action', '--esbuild'],
+            esbuild: false,
             afterEmitAction: 'run-once',
         }).name('generate-client'),
     );
