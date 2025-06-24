@@ -18,7 +18,7 @@ import { LoggerService } from '../modules/logger/logger.service';
 
 const IS_CONTROLLER = Symbol();
 
-function isHerbalController(target: Function) {
+export function isHerbalController(target: Function) {
     return _.attempt(() => Reflect.getMetadata(IS_CONTROLLER, target.prototype)) === true;
 }
 
