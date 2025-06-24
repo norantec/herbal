@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import * as _ from 'lodash';
 import { Command } from 'commander';
 import { Builder, BuilderOptions } from '../builder';
@@ -8,12 +10,12 @@ command
     .argument('<type>', 'Run type, e.g. build/client/watch')
     .argument('<entry>', 'Entry path relative to work-dir and source-dir, e.g. main.ts')
     .option('--clean', 'Clean legacy output', true)
-    .option('--work-dir', 'Work directory path', process.cwd())
-    .option('--source-dir', 'Source directory path', 'src')
-    .option('--output-dir', 'Output path', 'dist')
-    .option('--output-name', 'Output file name', 'main')
-    .option('--output-name-format', 'Ouptput file name format', '[name].js')
-    .option('--ts-project', 'Path for TypeScript config file', 'tsconfig.json')
+    .option('--work-dir <string>', 'Work directory path', process.cwd())
+    .option('--source-dir <string>', 'Source directory path', 'src')
+    .option('--output-dir <string>', 'Output directory path', 'dist')
+    .option('--output-name <string>', 'Output file name', 'main')
+    .option('--output-name-format <string>', 'Ouptput file name format', '[name].js')
+    .option('--ts-project <string>', 'Path for TypeScript config file', 'tsconfig.json')
     .option('--debug', 'Debug mode', false)
     .action((type, entry, options) => {
         new Builder({

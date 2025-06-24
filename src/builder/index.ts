@@ -13,7 +13,37 @@ import * as memfs from 'memfs';
 import { Worker } from 'node:worker_threads';
 import * as chokidar from 'chokidar';
 import * as ignore from 'ignore';
-const WebpackBarPlugin = require('progress-bar-webpack-plugin');
+import * as readline from 'node:readline';
+import * as chalk from 'chalk';
+
+class ProgressPlugin {
+    apply(compiler) {
+        // 使用官方 ProgressPlugin 获取进度
+        new webpack.ProgressPlugin((percentage, message, ...args) => {
+            const percent = Math.floor(percentage * 100);
+            const file = args[0] || '';
+
+            // 渲染进度条
+            ProgressPlugin.renderProgressBar(percent, message, file);
+        }).apply(compiler);
+    }
+
+    static renderProgressBar(percent, message, file) {
+        const barLength = 40;
+        const filledLength = Math.round((percent / 100) * barLength);
+        const bar = `${'█'.repeat(filledLength)}${'-'.repeat(barLength - filledLength)}`;
+
+        readline.clearLine(process.stdout, 0);
+        readline.cursorTo(process.stdout, 0);
+        process.stdout.write(
+            `${chalk.green(`[${bar}]`)} ${chalk.yellow(`${percent}%`)} ${chalk.gray(message)} ${chalk.cyan(file)}`,
+        );
+
+        if (percent === 100) {
+            process.stdout.write('\n');
+        }
+    }
+}
 
 class CatchNotFoundPlugin {
     public constructor(private logger?: winston.Logger) {}
@@ -385,7 +415,7 @@ export class Builder {
                 ],
             },
             plugins: [
-                new WebpackBarPlugin(),
+                new ProgressPlugin(),
                 ...(() => {
                     const result: any[] = [];
 
@@ -462,20 +492,18 @@ export class Builder {
                                     case 'client': {
                                         return [
                                             "import 'reflect-metadata';",
-                                            `import ENTRY from '${this.virtualEntryFilePath}';`,
+                                            `import ENTRY from '${this.entryFilePath}';`,
                                             "import * as fs from 'node:fs';",
                                             "import * as path from 'node:path';",
                                             '\nasync function bootstrap() {',
                                             `    const absoluteOutputFilePath = '${this.outputPath}';`,
                                             '    await ENTRY?.options?.onBeforeBootstrap?.();',
-                                            '',
                                             '    try {',
                                             '        fs.rmSync(absoluteOutputFilePath, {',
                                             '            recursive: true,',
                                             '            force: true,',
                                             '        });',
                                             '    } catch {}',
-                                            '',
                                             '    try {',
                                             '        if (!fs.statSync(path.dirname(absoluteOutputFilePath)).isDirectory()) {',
                                             '            fs.rmSync(path.dirname(absoluteOutputFilePath), {',
@@ -485,9 +513,8 @@ export class Builder {
                                             '        }',
                                             '        fs.mkdirSync(path.dirname(absoluteOutputFilePath), { recursive: true });',
                                             '    } catch {}',
-                                            '',
                                             '    fs.writeFileSync(',
-                                            '        absoluteOutputFilePath,',
+                                            `        path.resolve(absoluteOutputFilePath, '${this.options.outputName}.ts'),`,
                                             '        ENTRY?.generateClientSourceFile?.({',
                                             '            Module: ENTRY?.options?.Module,',
                                             '        }),',
