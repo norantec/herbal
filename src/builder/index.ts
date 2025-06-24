@@ -13,7 +13,7 @@ import * as memfs from 'memfs';
 import { Worker } from 'node:worker_threads';
 import * as chokidar from 'chokidar';
 import * as ignore from 'ignore';
-const WebpackBarPlugin = require('webpackbar');
+const WebpackBarPlugin = require('progress-bar-webpack-plugin');
 
 class CatchNotFoundPlugin {
     public constructor(private logger?: winston.Logger) {}
@@ -290,7 +290,7 @@ export class Builder {
         }
 
         this.tsConfig = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(configPath));
-        this.entryFilePath = path.resolve(this.options.workDir!, this.options.entry!);
+        this.entryFilePath = path.resolve(this.options.workDir!, this.options.sourceDir!, this.options.entry!);
         this.entryDirPath = path.dirname(this.entryFilePath);
         this.outputPath = path.resolve(this.options.workDir!, this.options.outputDir!);
         this.virtualEntryFilePath = path.resolve(
@@ -385,9 +385,7 @@ export class Builder {
                 ],
             },
             plugins: [
-                new WebpackBarPlugin({
-                    name: type,
-                }),
+                new WebpackBarPlugin(),
                 ...(() => {
                     const result: any[] = [];
 
@@ -403,7 +401,7 @@ export class Builder {
                                             "import { NestFactory } from '@nestjs/core';",
                                             "import { ModelUtil } from '@open-norantec/herbal/dist/utilities/model-util.class';",
                                             "import { LoggerService } from '@open-norantec/herbal/dist/modules/logger/logger.service';",
-                                            `import ENTRY from '${this.virtualEntryFilePath}';`,
+                                            `import ENTRY from '${this.entryFilePath}';`,
                                             '\nasync function bootstrap() {',
                                             '    const entryOptions = ENTRY?.options;',
                                             '    await entryOptions?.onBeforeBootstrap?.();',
