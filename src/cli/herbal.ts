@@ -2,6 +2,7 @@
 
 import { Command } from 'commander';
 import { createForgeCommand, CreateForgeCommandOptions } from '@open-norantec/forge';
+import { Schema } from '@open-norantec/utilities/dist/schema-util.class';
 
 const command = new Command('herbal');
 
@@ -112,9 +113,14 @@ const getGenerateClientEntryFileContent: CreateForgeCommandOptions['getEntryFile
     ].join('\n');
 };
 
+const handleLog = (level: Schema.LogLevel, message?: string) => {
+    console.log(`[${new Date().toISOString()}] [${level}] ${message}`);
+};
+
 command
     .addCommand(
         createForgeCommand({
+            onLog: handleLog,
             getEntryFileContent,
             hideOptions: ['--after-emit-action', '--ts-compiler'],
             afterEmitAction: 'none',
@@ -122,6 +128,7 @@ command
     )
     .addCommand(
         createForgeCommand({
+            onLog: handleLog,
             getEntryFileContent,
             hideOptions: ['--after-emit-action', '--ts-compiler'],
             afterEmitAction: 'watch',
@@ -129,6 +136,7 @@ command
     )
     .addCommand(
         createForgeCommand({
+            onLog: handleLog,
             getEntryFileContent: getGenerateClientEntryFileContent,
             hideOptions: ['--after-emit-action', '--ts-compiler'],
             afterEmitAction: 'run-once',
