@@ -116,25 +116,25 @@ command
     .addCommand(
         createForgeCommand({
             getEntryFileContent,
-            hideOptions: ['--after-emit-action', '--esbuild'],
-            esbuild: false,
+            hideOptions: ['--after-emit-action', '--ts-compiler'],
             afterEmitAction: 'none',
         }).name('build'),
     )
     .addCommand(
         createForgeCommand({
             getEntryFileContent,
-            hideOptions: ['--after-emit-action', '--esbuild'],
-            esbuild: false,
+            hideOptions: ['--after-emit-action', '--ts-compiler'],
             afterEmitAction: 'watch',
         }).name('watch'),
     )
     .addCommand(
         createForgeCommand({
             getEntryFileContent: getGenerateClientEntryFileContent,
-            hideOptions: ['--after-emit-action', '--esbuild'],
-            esbuild: false,
+            hideOptions: ['--after-emit-action', '--ts-compiler'],
             afterEmitAction: 'run-once',
+            tsCompiler: require.resolve('ts-patch/compiler', {
+                paths: [__dirname, process.cwd()],
+            }),
         }).name('generate-client'),
     );
 
