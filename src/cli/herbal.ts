@@ -125,7 +125,6 @@ command
             getEntryFileContent,
             hideOptions: ['--after-emit-action', '--ts-compiler'],
             afterEmitAction: 'watch',
-            mode: 'development',
         }).name('watch'),
     )
     .addCommand(
