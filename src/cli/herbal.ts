@@ -121,7 +121,8 @@ command
         createForgeCommand({
             onLog: handleLog,
             getEntryFileContent,
-            hideOptions: ['--after-emit-action', '--ts-compiler'],
+            hideOptions: ['--after-emit-action', '--ts-compiler', '--mode'],
+            mode: 'production',
             afterEmitAction: 'none',
         }).name('build'),
     )
@@ -130,6 +131,7 @@ command
             onLog: handleLog,
             getEntryFileContent,
             hideOptions: ['--after-emit-action', '--ts-compiler'],
+            mode: 'development',
             afterEmitAction: 'watch',
         }).name('watch'),
     )
@@ -137,7 +139,8 @@ command
         createForgeCommand({
             onLog: handleLog,
             getEntryFileContent: getGenerateClientEntryFileContent,
-            hideOptions: ['--after-emit-action', '--ts-compiler'],
+            hideOptions: ['--after-emit-action', '--ts-compiler', '--mode'],
+            mode: 'production',
             afterEmitAction: 'run-once',
             tsCompiler: require.resolve('ts-patch/compiler', {
                 paths: [__dirname, process.cwd()],
