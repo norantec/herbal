@@ -95,7 +95,7 @@ export function create(options: CreateOptions) {
             return [
                 "import * as hash from 'object-hash';",
                 "import * as _ from 'lodash';",
-                `import { ${HTTP_RESPONSE_BODY_TYPE_NAME} } from '@open-norantec/toolchain/dist/interfaces/http-response-body.interface';`,
+                `import { ${HTTP_RESPONSE_BODY_TYPE_NAME} } from '@open-norantec/herbal';`,
                 `\n${methodTypeMapCodeLines.join('\n')}`,
                 `\ntype ${METHOD_TYPE_MAP_KEYS_NAME} = keyof ${METHOD_TYPE_MAP_NAME};`,
                 `\ntype ${RESPONSE_CALLBACK_DATA_NAME} = {`,
