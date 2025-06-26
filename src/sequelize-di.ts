@@ -3,16 +3,11 @@
 import { BelongsToOptions } from 'sequelize';
 import {
     BelongsTo as SequelizeBelongsTo,
-    Column,
     Model,
     Table as SequelizeTable,
     TableOptions,
     ModelClassGetter,
-    DataType,
-    CreatedAt,
-    UpdatedAt,
 } from 'sequelize-typescript';
-import { v4 as uuid } from 'uuid';
 import { Constructor } from 'type-fest';
 
 export * from 'sequelize-typescript';
@@ -39,17 +34,4 @@ export function BelongsTo(associatedClassGetter: ModelClassGetter<{}, {}>, optio
         onDelete: 'CASCADE',
         ...options,
     });
-}
-
-export class HerbalModel extends Model {
-    @Column({ primaryKey: true, type: DataType.UUID, defaultValue: uuid })
-    public id: string;
-
-    @CreatedAt
-    @Column({ field: 'created_at' })
-    public createdAt: Date;
-
-    @UpdatedAt
-    @Column({ field: 'updated_at' })
-    public updatedAt: Date;
 }
