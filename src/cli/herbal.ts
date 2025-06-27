@@ -9,8 +9,7 @@ const command = new Command('herbal');
 const getEntryFileContent: CreateForgeCommandOptions['getEntryFileContent'] = ({ entryFilePath }) => {
     return [
         "import 'reflect-metadata';",
-        "import { NestFactory } from '@nestjs/core';",
-        "import { ModelUtil } from '@open-norantec/herbal/dist/utilities/model-util.class';",
+        "import { ModelUtil, NestFactory } from '@open-norantec/herbal';",
         "import { LoggerService } from '@open-norantec/herbal/dist/modules/logger/logger.service';",
         `import ENTRY from '${entryFilePath}';`,
         '\nasync function bootstrap() {',
