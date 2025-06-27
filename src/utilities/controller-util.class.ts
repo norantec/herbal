@@ -70,6 +70,7 @@ class ControllerInterceptor implements NestInterceptor {
                 _.attempt(() => {
                     this.getLogger().error(`[trace:${request?.traceId}:response:error:stack] ${error?.stack}`);
                 });
+                _.attempt(() => request?.transaction?.rollback?.()?.catch?.(() => {}));
                 return throwError(() => error);
             }),
         );
