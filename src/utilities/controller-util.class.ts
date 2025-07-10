@@ -30,6 +30,9 @@ class ControllerInterceptor implements NestInterceptor {
     public intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
         const request: Request = context.switchToHttp().getRequest();
         if (isHerbalController(context.getClass())) {
+            _.attempt(() => {
+                this.getLogger().log(`[trace:${request?.traceId}:response:url] ${request?.originalUrl}`);
+            });
             _.attempt(() =>
                 this.getLogger().log(`[trace:${request?.traceId}:request:body] ${JSON.stringify(request?.body)}`),
             );
