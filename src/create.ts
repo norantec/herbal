@@ -5,7 +5,7 @@ import { Constructor } from 'type-fest';
 import { NestUtil } from './utilities/nest-util.class';
 import { StringUtil } from '@open-norantec/utilities/dist/string-util.class';
 import { DECORATOR_NAME_PREFIX } from './transformers/reflect-declaration';
-import { HideInClient } from './decorators/hide-in-client.decorator';
+import { ClientGroups, GroupsFactory } from './decorators/client-groups.decorator';
 import {
     CanActivate,
     ExceptionFilter,
@@ -29,19 +29,16 @@ export interface CreateOptions {
     globalPipes?: PipeTransform<any>[];
     uses?: any[];
     websocketAdapter?: WebSocketAdapter;
+    allowedClientGroupsFactory?: GroupsFactory;
     getListenPort: (resolver: Resolver) => number | Promise<number>;
     callback?: (resolver: Resolver) => void | Promise<void>;
     onBeforeBootstrap?: () => void | Promise<void>;
 }
 
-export interface SDKGeneratorOptions {
-    Module: Constructor<any>;
-}
-
 export function create(options: CreateOptions) {
     return {
         options,
-        generateClientSourceFile: (options: SDKGeneratorOptions) => {
+        generateClientSourceFile: () => {
             if (!options?.Module) throw new Error("Parameter 'Module' must be specified");
 
             const METHOD_TYPE_MAP_NAME = 'MethodTypeMap';
@@ -72,7 +69,7 @@ export function create(options: CreateOptions) {
                             if (
                                 StringUtil.isFalsyString(metadataName) ||
                                 !metadataName.startsWith(DECORATOR_NAME_PREFIX) ||
-                                HideInClient.isHidden(Class, methodName)
+                                !ClientGroups.shouldShowInClient(Class, methodName, options?.allowedClientGroupsFactory)
                             ) {
                                 return result;
                             }

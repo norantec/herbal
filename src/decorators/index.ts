@@ -1,2 +1,2 @@
 export * from './auth-adapter.decorator';
-export * from './hide-in-client.decorator';
+export * from './client-groups.decorator';
