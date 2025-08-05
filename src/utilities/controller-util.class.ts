@@ -105,7 +105,7 @@ class HerbalGuard implements CanActivate {
                 for (const AuthAdapterClass of authAdapters) {
                     const adapter = new AuthAdapterClass(request, this.ref);
                     if (!adapter.match()) continue;
-                    const authenticateResult = await adapter.authenticate();
+                    const authenticateResult = await adapter.authenticate(transaction);
                     if (!authenticateResult) break;
                     request.authenticateResult = {
                         AuthenticatorClass: AuthAdapterClass,

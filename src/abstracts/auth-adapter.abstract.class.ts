@@ -1,6 +1,7 @@
 import { ModuleRef } from '@nestjs/core';
 import { Constructor } from 'type-fest';
 import { Request } from 'express';
+import { Transaction } from 'sequelize';
 
 export interface AuthenticateReturn {
     challengeValue: string;
@@ -19,5 +20,5 @@ export abstract class AuthAdapter {
         protected readonly ref: ModuleRef,
     ) {}
     public abstract match(): boolean;
-    public abstract authenticate(): Promise<AuthenticateReturn | null>;
+    public abstract authenticate(transaction?: Transaction): Promise<AuthenticateReturn | null>;
 }
