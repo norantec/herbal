@@ -111,6 +111,12 @@ const getGenerateClientEntryFileContent: CreateForgeCommandOptions['getEntryFile
 
 const handleLog = (level: Schema.LogLevel, message?: string) => {
     console.log(`[${new Date().toISOString()}] [${level}] ${message}`);
+    switch (level) {
+        case 'error':
+            process.exit(1);
+        default:
+            break;
+    }
 };
 
 command
