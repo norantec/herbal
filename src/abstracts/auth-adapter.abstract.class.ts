@@ -4,21 +4,21 @@ import { Request } from 'express';
 import { Transaction } from 'sequelize';
 
 export interface AuthenticateReturn {
-    challengeValue: string;
-    identifier: string;
-    forbidden?: boolean;
-    nextToken?: string;
+  challengeValue: string;
+  identifier: string;
+  forbidden?: boolean;
+  nextToken?: string;
 }
 
 export interface AuthenticateResult extends AuthenticateReturn {
-    AuthenticatorClass: Constructor<AuthAdapter>;
+  AuthenticatorClass: Constructor<AuthAdapter>;
 }
 
 export abstract class AuthAdapter {
-    public constructor(
-        protected readonly request: Request,
-        protected readonly ref: ModuleRef,
-    ) {}
-    public abstract match(): boolean;
-    public abstract authenticate(transaction?: Transaction): Promise<AuthenticateReturn | null>;
+  public constructor(
+    protected readonly request: Request,
+    protected readonly ref: ModuleRef,
+  ) {}
+  public abstract match(): boolean;
+  public abstract authenticate(transaction?: Transaction): Promise<AuthenticateReturn | null>;
 }

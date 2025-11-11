@@ -4,8 +4,8 @@ import { RequestScopeModule } from 'nj-request-scope';
 
 @Global()
 @Module({
-    imports: [RequestScopeModule],
-    providers: [LoggerService],
-    exports: [LoggerService],
+  imports: [RequestScopeModule],
+  providers: [LoggerService],
+  exports: [LoggerService],
 })
 export class LoggerModule {}

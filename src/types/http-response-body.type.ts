@@ -1,4 +1,4 @@
 export type HttpResponseBody<T> = {
-    data: T;
-    token: string | null;
+  data: T;
+  token: string | null;
 };
