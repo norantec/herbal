@@ -6,15 +6,13 @@ import { Request } from '../../types/request.type';
 @Injectable()
 @RequestScope()
 export class LoggerService {
-  public static getTraceId = () => null;
-
   public constructor(
     @Inject(NJRS_REQUEST)
     private readonly request: Request,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: WinstonLogger,
   ) {
-    this?.logger?.setContext?.(((LoggerService?.getTraceId?.() || this?.request?.traceId) as string) || 'Generic');
+    this?.logger?.setContext?.((this?.request?.traceId as string) || 'Generic');
   }
 
   public log(message: any) {

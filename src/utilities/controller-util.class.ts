@@ -1,13 +1,13 @@
 /* eslint-disable @typescript-eslint/no-unsafe-function-type */
 import 'reflect-metadata';
-import { Controller as NestController, UseInterceptors, UseGuards } from '@nestjs/common';
+import { Controller as NestController, UseInterceptors, UseGuards, mixin } from '@nestjs/common';
 import * as _ from 'lodash';
 import { StringUtil } from '@open-norantec/utilities/dist/string-util.class';
 import { CallHandler, CanActivate, Injectable, NestInterceptor, UnauthorizedException } from '@nestjs/common';
 import { ExecutionContext } from '@nestjs/common';
 import { Request } from '../types/request.type';
 import { v4 as uuidv4 } from 'uuid';
-import { Response } from 'express';
+import { Request as ExpressRequest, Response } from 'express';
 import { HEADERS } from '../constants/headers.constant';
 import { ModuleRef } from '@nestjs/core';
 import { Constructor } from 'type-fest';
@@ -80,52 +80,6 @@ class ControllerInterceptor implements NestInterceptor {
   }
 }
 
-@Injectable()
-class HerbalGuard implements CanActivate {
-  public constructor(protected readonly ref: ModuleRef) {}
-
-  public async canActivate(context: ExecutionContext): Promise<boolean> {
-    const traceId = uuidv4();
-    const transaction = await this.ref
-      ?.get?.(Sequelize, { strict: false })
-      ?.transaction?.()
-      ?.catch(() => Promise.resolve(undefined));
-    const request: Request = context.switchToHttp().getRequest();
-    const response: Response = context.switchToHttp().getResponse();
-
-    request.traceId = traceId;
-    request.methodName = request.url.split('/').pop()!;
-    request.transaction = transaction;
-    response.setHeader(HEADERS.TRACE_ID, traceId);
-
-    const authAdapters = AuthAdapters.getAdapters(context?.getClass?.()?.prototype, request.methodName);
-
-    try {
-      if (Array.isArray(authAdapters) && authAdapters.length > 0) {
-        for (const AuthAdapterClass of authAdapters) {
-          const adapter = new AuthAdapterClass(request, this.ref);
-          if (!adapter.match()) continue;
-          const authenticateResult = await adapter.authenticate(transaction);
-          if (!authenticateResult) break;
-          request.authenticateResult = {
-            AuthenticatorClass: AuthAdapterClass,
-            ...authenticateResult,
-          };
-          return true;
-        }
-        throw new UnauthorizedException();
-      }
-    } catch (error) {
-      try {
-        await transaction?.rollback?.();
-      } catch {}
-      throw error;
-    }
-
-    return true;
-  }
-}
-
 export interface HerbalControllerOptions {
   prefix?: string;
   useHeadGuards?: Constructor<any>[];
@@ -135,6 +89,60 @@ export interface HerbalControllerOptions {
 export interface ControllerUtilCreateOptions {
   prefix?: string;
   useGuards?: Constructor<any>[];
+  getTraceId?: (request: ExpressRequest) => string;
+}
+
+function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
+  @Injectable()
+  class HerbalGuardMixin implements CanActivate {
+    public constructor(protected readonly ref: ModuleRef) {}
+
+    public async canActivate(context: ExecutionContext): Promise<boolean> {
+      const transaction = await this.ref
+        ?.get?.(Sequelize, { strict: false })
+        ?.transaction?.()
+        ?.catch(() => Promise.resolve(undefined));
+      const request: Request = context.switchToHttp().getRequest();
+      const response: Response = context.switchToHttp().getResponse();
+      let traceId =
+        typeof options?.getTraceId === 'function' ? _.attempt(() => options!.getTraceId!(request)) : uuidv4();
+
+      if (traceId instanceof Error) traceId = uuidv4();
+
+      request.traceId = traceId;
+      request.methodName = request.url.split('/').pop()!;
+      request.transaction = transaction;
+      response.setHeader(HEADERS.TRACE_ID, traceId);
+
+      const authAdapters = AuthAdapters.getAdapters(context?.getClass?.()?.prototype, request.methodName);
+
+      try {
+        if (Array.isArray(authAdapters) && authAdapters.length > 0) {
+          for (const AuthAdapterClass of authAdapters) {
+            const adapter = new AuthAdapterClass(request, this.ref);
+            if (!adapter.match()) continue;
+            const authenticateResult = await adapter.authenticate(transaction);
+            if (!authenticateResult) break;
+            request.authenticateResult = {
+              AuthenticatorClass: AuthAdapterClass,
+              ...authenticateResult,
+            };
+            return true;
+          }
+          throw new UnauthorizedException();
+        }
+      } catch (error) {
+        try {
+          await transaction?.rollback?.();
+        } catch {}
+        throw error;
+      }
+
+      return true;
+    }
+  }
+
+  return mixin(HerbalGuardMixin);
 }
 
 export class ControllerUtil {
@@ -152,7 +160,7 @@ export class ControllerUtil {
         NestController(finalPrefix)(target);
         UseInterceptors(ControllerInterceptor)(target);
         UseGuards(
-          HerbalGuard,
+          HerbalGuard(_.pick(createOptions, ['getTraceId'])),
           ...(Array.isArray(options?.useHeadGuards) ? options!.useHeadGuards : []),
           ...(Array.isArray(createOptions?.useGuards) ? createOptions!.useGuards : []),
           ...(Array.isArray(options?.useTailGuards) ? options!.useTailGuards : []),
