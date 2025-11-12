@@ -31,7 +31,7 @@ export interface CreateOptions {
   websocketAdapter?: WebSocketAdapter;
   getListenPort: (resolver: Resolver) => number | Promise<number>;
   allowedClientGroupsFactory?: GroupsFactory;
-  callback?: (resolver: Resolver) => void | Promise<void>;
+  callback?: (resolver: Resolver, listenPort: number) => void | Promise<void>;
   onBeforeBootstrap?: () => void | Promise<void>;
   worker?: (resolver: Resolver, listenPort: number) => any;
 }
