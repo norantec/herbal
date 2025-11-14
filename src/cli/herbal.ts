@@ -61,7 +61,7 @@ const getEntryFileContent: CreateForgeCommandOptions['getEntryFileContent'] = ({
     '  }',
     '\n  await app.listen(finalListenPort, () => {',
     '    loggerService.log(`Listening on port: ${finalListenPort}`);',
-    '    entryOptions?.callback?.(resolver, finalListenPort);',
+    '    entryOptions?.callback?.(resolver, finalListenPort, app.getHttpServer());',
     '  });',
     '}',
     '\nbootstrap();',
