@@ -9,7 +9,7 @@ import { ClientGroups, GroupsFactory } from './decorators/client-groups.decorato
 import {
   CanActivate,
   ExceptionFilter,
-  HttpServer,
+  INestApplication,
   NestApplicationOptions,
   NestInterceptor,
   PipeTransform,
@@ -32,7 +32,7 @@ export interface CreateOptions {
   websocketAdapter?: WebSocketAdapter;
   getListenPort: (resolver: Resolver) => number | Promise<number>;
   allowedClientGroupsFactory?: GroupsFactory;
-  callback?: (resolver: Resolver, listenPort: number, httpServer: HttpServer) => void | Promise<void>;
+  callback?: (listenPort: number, app: INestApplication<any>) => void | Promise<void>;
   onBeforeBootstrap?: () => void | Promise<void>;
   worker?: (resolver: Resolver, listenPort: number) => any;
 }
