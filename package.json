@@ -5,7 +5,8 @@
   "main": "dist/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "rimraf dist && tsc -b"
+    "build": "rimraf dist && tsc -b",
+    "postinstall": "patch-package"
   },
   "repository": {
     "type": "git",
@@ -41,9 +42,10 @@
     "lodash": "^4.17.21",
     "nest-winston": "^1.10.2",
     "nj-request-scope": "^1.0.10",
+    "patch-package": "^8.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "sequelize": "6.28.0",
+    "sequelize": "6.37.7",
     "sequelize-typescript": "^2.1.5",
     "ts-patch": "^3.3.0",
     "type-fest": "^4.41.0",
