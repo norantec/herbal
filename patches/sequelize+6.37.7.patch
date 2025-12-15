@@ -1,0 +1,15 @@
+diff --git a/node_modules/sequelize/lib/associations/has-many.js b/node_modules/sequelize/lib/associations/has-many.js
+index 56f3788..215cd2c 100644
+--- a/node_modules/sequelize/lib/associations/has-many.js
++++ b/node_modules/sequelize/lib/associations/has-many.js
+@@ -175,7 +175,9 @@ class HasMany extends Association {
+       result[_instance.get(this.sourceKey, { raw: true })] = [];
+     }
+     for (const _instance of results) {
+-      result[_instance.get(this.foreignKey, { raw: true })].push(_instance);
++      const currentKey = _instance.get(this.foreignKey, { raw: true });
++      if (!Array.isArray(result[currentKey])) result[currentKey] = [];
++      result[currentKey].push(_instance);
+     }
+     return result;
+   }
