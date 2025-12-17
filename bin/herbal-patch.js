@@ -37,7 +37,7 @@ command.action(async () => {
     await new Promise((resolve) => {
       const childProcess = spawn(
         'npx',
-        ['patch-package', `--patch-dir=${path.relative(process.cwd(), path.resolve(__dirname, '../patches'))}`],
+        ['patch-package', `--patch-dir=${path.relative(cwd, path.resolve(__dirname, '../patches'))}`],
         {
           stdio: 'inherit',
           cwd,
