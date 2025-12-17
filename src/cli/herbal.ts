@@ -3,6 +3,8 @@
 import { Command } from 'commander';
 import { createForgeCommand, CreateForgeCommandOptions } from '@open-norantec/forge';
 import { Schema } from '@open-norantec/utilities/dist/schema-util.class';
+import { spawn } from 'node:child_process';
+import * as path from 'node:path';
 
 const command = new Command('herbal');
 
@@ -117,6 +119,31 @@ const handleLog = (level: Schema.LogLevel, message?: string) => {
       break;
   }
 };
+const patchCommand = new Command('patch');
+
+patchCommand.action(async () => {
+  let cwd = __dirname.split('/node_modules/').slice(0, -1).join('/node_modules/');
+
+  while (true) {
+    console.log(`Patching: ${cwd}`);
+
+    await new Promise((resolve) => {
+      const childProcess = spawn('npx', ['patch-package', `--patch-dir=${path.resolve(__dirname, '../patches')}`], {
+        stdio: 'inherit',
+        cwd,
+      });
+      childProcess.on('exit', () => {
+        resolve(undefined);
+      });
+    });
+
+    const newCwd = cwd.split('/node_modules/').slice(0, -1).join('/node_modules/');
+
+    if (cwd === newCwd) break;
+
+    cwd = newCwd;
+  }
+});
 
 command
   .addCommand(
@@ -148,6 +175,7 @@ command
         paths: [__dirname, process.cwd()],
       }),
     }).name('generate-client'),
-  );
+  )
+  .addCommand(patchCommand);
 
 command.parse(process.argv);
