@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "rimraf dist && tsc -b",
-    "postinstall": "herbal patch"
+    "postinstall": "node ./bin/herbal-patch.js"
   },
   "repository": {
     "type": "git",
@@ -17,6 +17,7 @@
     "url": "https://github.com/norantec/herbal/issues"
   },
   "files": [
+    "bin",
     "dist",
     "patches",
     "preserved"

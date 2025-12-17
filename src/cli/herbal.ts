@@ -3,11 +3,6 @@
 import { Command } from 'commander';
 import { createForgeCommand, CreateForgeCommandOptions } from '@open-norantec/forge';
 import { Schema } from '@open-norantec/utilities/dist/schema-util.class';
-import { spawn } from 'node:child_process';
-import * as path from 'node:path';
-import { StringUtil } from '@open-norantec/utilities';
-import { statSync } from 'node:fs';
-import * as _ from 'lodash';
 
 const command = new Command('herbal');
 
@@ -122,54 +117,6 @@ const handleLog = (level: Schema.LogLevel, message?: string) => {
       break;
   }
 };
-const patchCommand = new Command();
-
-patchCommand.action(async () => {
-  const findParentProjectPath = (currentPath: string) => {
-    let result = currentPath;
-    let hasNodeModules = false;
-
-    while (!hasNodeModules) {
-      const newResult = path.resolve(result, '..');
-      if (newResult === result) break;
-      result = newResult;
-      hasNodeModules = _.attempt(() => statSync(path.join(result, 'node_modules')).isDirectory()) === true;
-    }
-
-    return hasNodeModules ? result : undefined;
-  };
-
-  let cwd = findParentProjectPath(__dirname);
-
-  if (StringUtil.isFalsyString(cwd)) {
-    console.log('Warning: not a Node.js project path, nothing to patch, exitting...');
-    process.exit(0);
-  }
-
-  while (true) {
-    console.log(`Patching: ${cwd}`);
-
-    await new Promise((resolve) => {
-      const childProcess = spawn(
-        'npx',
-        ['patch-package', `--patch-dir=${path.relative(process.cwd(), path.resolve(__dirname, '../../patches'))}`],
-        {
-          stdio: 'inherit',
-          cwd,
-        },
-      );
-      childProcess.on('exit', () => {
-        resolve(undefined);
-      });
-    });
-
-    const newCwd = findParentProjectPath(cwd!);
-
-    if (StringUtil.isFalsyString(newCwd)) break;
-
-    cwd = newCwd;
-  }
-});
 
 command
   .addCommand(
@@ -201,7 +148,6 @@ command
         paths: [__dirname, process.cwd()],
       }),
     }).name('generate-client'),
-  )
-  .addCommand(patchCommand.name('patch'));
+  );
 
 command.parse(process.argv);
