@@ -118,6 +118,20 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
       request.transaction = transaction;
       response.setHeader(HEADERS.TRACE_ID, traceId);
 
+      const chunks: Uint8Array[] = [];
+
+      try {
+        for await (const chunk of request) chunks.push(chunk);
+      } catch {}
+
+      const parsedBody = _.attempt(() => Buffer.concat(chunks).toString('utf8'));
+
+      if (!(parsedBody instanceof Error)) {
+        request.rawBody = parsedBody;
+      } else {
+        request.rawBody = null;
+      }
+
       const authAdapters = AuthAdapters.getAdapters(context?.getClass?.()?.prototype, request.methodName);
 
       try {

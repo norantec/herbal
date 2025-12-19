@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { BadRequestException, Body, NotFoundException, Post, Req } from '@nestjs/common';
+import { BadRequestException, NotFoundException, Post, Req } from '@nestjs/common';
 import { HeaderUtil } from '@open-norantec/utilities/dist/header-util.class';
 import { z, ZodAny, ZodError } from 'zod';
 import * as _ from 'lodash';
@@ -49,25 +49,17 @@ export class HerbalController {
   };
 
   @Post('*')
-  private async handler(@Req() request: Request, @Body() input: unknown): Promise<HttpResponseBody<any>> {
-    let body = input;
+  private async handler(@Req() request: Request): Promise<HttpResponseBody<any>> {
     const methodHandler: MethodHandler<z.Schema<any>, z.Schema<any>> = this[request?.methodName];
-
-    if (!_.isPlainObject(input)) {
-      const chunks: Uint8Array[] = [];
-      try {
-        for await (const chunk of request) chunks.push(chunk);
-      } catch {}
-      const parsedBody = _.attempt(() => JSON.parse(Buffer.concat(chunks).toString('utf8')));
-      if (!(parsedBody instanceof Error)) body = parsedBody;
-    }
-
+    const parsedBody = _.attempt(() => JSON.parse(request?.rawBody || '') as Record<string, unknown>);
     try {
       if (typeof methodHandler === 'function') {
         const result = {
-          data: await methodHandler(request, body, HeaderUtil.parse(request.headers ?? {})).then(
-            (response) => response?.response,
-          ),
+          data: await methodHandler(
+            request,
+            parsedBody instanceof Error ? undefined : parsedBody,
+            HeaderUtil.parse(request.headers ?? {}),
+          ).then((response) => response?.response),
           token: StringUtil.isFalsyString(request?.authenticateResult?.nextToken)
             ? null
             : request.authenticateResult!.nextToken!,

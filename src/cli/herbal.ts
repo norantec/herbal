@@ -22,6 +22,7 @@ const getEntryFileContent: CreateForgeCommandOptions['getEntryFileContent'] = ({
     '  }',
     '  const app = await NestFactory.create(entryOptions?.Module, {',
     '    ...entryOptions?.factoryOptions,',
+    '    bodyParser: false,',
     '  });',
     '\n  if (entryOptions?.cors !== false) {',
     '    app.enableCors({',

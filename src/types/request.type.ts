@@ -4,6 +4,7 @@ import { Transaction } from 'sequelize';
 
 export type Request = ExpressRequest & {
   methodName: string;
+  rawBody: string | null;
   traceId: string;
   authenticateResult?: AuthenticateResult;
   transaction?: Transaction;
