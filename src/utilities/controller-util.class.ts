@@ -16,6 +16,7 @@ import { Observable, throwError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { LoggerService } from '../modules/logger/logger.service';
 import { Sequelize } from 'sequelize-typescript';
+import { Transaction } from 'sequelize';
 
 const IS_CONTROLLER = Symbol();
 
@@ -98,10 +99,13 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
     public constructor(protected readonly ref: ModuleRef) {}
 
     public async canActivate(context: ExecutionContext): Promise<boolean> {
-      const transaction = await this.ref
-        ?.get?.(Sequelize, { strict: false })
-        ?.transaction?.()
-        ?.catch(() => Promise.resolve(undefined));
+      const sequelizeInstance = _.attempt(() => this.ref.get(Sequelize, { strict: false }));
+      let transaction: Transaction | undefined = undefined;
+
+      if (!(sequelizeInstance instanceof Error)) {
+        transaction = await sequelizeInstance?.transaction?.()?.catch(() => Promise.resolve(undefined));
+      }
+
       const request: Request = context.switchToHttp().getRequest();
       const response: Response = context.switchToHttp().getResponse();
       let traceId =
