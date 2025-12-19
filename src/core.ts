@@ -50,11 +50,22 @@ export class HerbalController {
 
   @Post('*')
   private async handler(@Req() request: Request, @Body() input: unknown): Promise<HttpResponseBody<any>> {
+    let body = input;
     const methodHandler: MethodHandler<z.Schema<any>, z.Schema<any>> = this[request?.methodName];
+
+    if (!_.isPlainObject(input)) {
+      const chunks: Uint8Array[] = [];
+      try {
+        for await (const chunk of request) chunks.push(chunk);
+      } catch {}
+      const parsedBody = _.attempt(() => JSON.parse(Buffer.concat(chunks).toString('utf8')));
+      if (!(parsedBody instanceof Error)) body = parsedBody;
+    }
+
     try {
       if (typeof methodHandler === 'function') {
         const result = {
-          data: await methodHandler(request, input, HeaderUtil.parse(request.headers ?? {})).then(
+          data: await methodHandler(request, body, HeaderUtil.parse(request.headers ?? {})).then(
             (response) => response?.response,
           ),
           token: StringUtil.isFalsyString(request?.authenticateResult?.nextToken)
