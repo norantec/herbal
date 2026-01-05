@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/no-empty-object-type */
 /* eslint-disable @typescript-eslint/no-unsafe-function-type */
-import { BelongsToOptions } from 'sequelize';
+import { BelongsToOptions, ModelAttributeColumnOptions } from 'sequelize';
 import {
   BelongsTo as SequelizeBelongsTo,
   Model,
   Table as SequelizeTable,
   TableOptions,
   ModelClassGetter,
+  Column,
+  DataType,
 } from 'sequelize-typescript';
 import { Constructor } from 'type-fest';
 
@@ -34,4 +36,16 @@ export function BelongsTo(associatedClassGetter: ModelClassGetter<{}, {}>, optio
     onDelete: 'CASCADE',
     ...options,
   });
+}
+
+export function DateColumn(options: Partial<ModelAttributeColumnOptions>): Function {
+  return (target: Constructor<any>, propertyName: string, propertyDescriptor?: PropertyDescriptor) => {
+    Column({
+      ...options,
+      type: DataType.DATE,
+      get(this: Model) {
+        return this.getDataValue?.(propertyName)?.toISOString?.() ?? null;
+      },
+    })(target, propertyName, propertyDescriptor);
+  }
 }
