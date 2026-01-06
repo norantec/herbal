@@ -25,12 +25,10 @@ export function Table<M extends Model = Model>({ indexes, ...options }: TableOpt
     newOptions.indexes = (
       Array.from(Array.isArray(indexes) ? indexes : []).map((item, index) => {
         if (typeof item === 'string') {
-          return [
-            {
-              name: `sidx__${index}`,
-              fields: [item],
-            },
-          ];
+          return {
+            name: `sidx__${index}`,
+            fields: [item],
+          };
         }
         return item;
       }) as IndexesOptions[]
