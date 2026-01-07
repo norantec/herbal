@@ -35,9 +35,6 @@ class ControllerInterceptor implements NestInterceptor {
         this.getLogger().log(`[trace:${request?.traceId}:response:url] ${request?.originalUrl}`);
       });
       _.attempt(() =>
-        this.getLogger().log(`[trace:${request?.traceId}:request:body] ${JSON.stringify(request?.body)}`),
-      );
-      _.attempt(() =>
         this.getLogger().log(`[trace:${request?.traceId}:request:headers] ${JSON.stringify(request?.headers)}`),
       );
       return this.handle(next, request);
@@ -132,6 +129,8 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
         request.rawBody = null;
       }
 
+      _.attempt(() => this.getLogger().log(`[trace:${request?.traceId}:request:body] ${request.rawBody}`));
+
       const authAdapters = AuthAdapters.getAdapters(context?.getClass?.()?.prototype, request.methodName);
 
       try {
@@ -157,6 +156,17 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
       }
 
       return true;
+    }
+
+    private getLogger() {
+      const loggerService = this.ref.get(LoggerService, { strict: false });
+      if (!(loggerService instanceof LoggerService)) {
+        return {
+          log: () => {},
+          error: () => {},
+        };
+      }
+      return loggerService;
     }
   }
 
