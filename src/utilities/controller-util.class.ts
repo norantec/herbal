@@ -71,6 +71,7 @@ class ControllerInterceptor implements NestInterceptor {
         _.attempt(() => {
           this.getLogger().error(`[trace:${request?.traceId}:response:error:stack] ${error?.stack}`);
         });
+        this.getLogger().error(`Got error when handling route in interceptor: ${error?.message} ${error?.stack}`);
         _.attempt(() => request?.transaction?.rollback?.()?.catch?.(() => {}));
         return throwError(() => error);
       }),
@@ -150,6 +151,7 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
         }
       } catch (error) {
         try {
+          this.getLogger().error(`Got error when handling route: ${error?.message} ${error?.stack}`);
           await transaction?.rollback?.();
         } catch {}
         throw error;
