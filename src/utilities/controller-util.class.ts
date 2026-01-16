@@ -3,10 +3,10 @@ import 'reflect-metadata';
 import { Controller as NestController, UseInterceptors, UseGuards, mixin } from '@nestjs/common';
 import * as _ from 'lodash';
 import { StringUtil } from '@open-norantec/utilities/dist/string-util.class';
+import { UUIDUtil } from '@open-norantec/utilities/dist/uuid-util.class';
 import { CallHandler, CanActivate, Injectable, NestInterceptor, UnauthorizedException } from '@nestjs/common';
 import { ExecutionContext } from '@nestjs/common';
 import { Request } from '../types/request.type';
-import { v4 as uuidv4 } from 'uuid';
 import { Request as ExpressRequest, Response } from 'express';
 import { HEADERS } from '../constants/headers.constant';
 import { ModuleRef } from '@nestjs/core';
@@ -107,9 +107,11 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
       const request: Request = context.switchToHttp().getRequest();
       const response: Response = context.switchToHttp().getResponse();
       let traceId =
-        typeof options?.getTraceId === 'function' ? _.attempt(() => options!.getTraceId!(request)) : uuidv4();
+        typeof options?.getTraceId === 'function'
+          ? _.attempt(() => options!.getTraceId!(request))
+          : UUIDUtil.generateV4();
 
-      if (traceId instanceof Error) traceId = uuidv4();
+      if (traceId instanceof Error || StringUtil.isFalsyString(traceId)) traceId = UUIDUtil.generateV4();
 
       request.traceId = traceId;
       request.methodName = request.url.split('/').pop()!;
@@ -132,7 +134,11 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
 
       _.attempt(() => this.getLogger().log(`[trace:${request?.traceId}:request:body] ${request.rawBody}`));
 
-      const authAdapters = AuthAdapters.getAdapters(context?.getClass?.()?.prototype, request.methodName);
+      const handlerName = context?.getHandler?.()?.name;
+      const authAdapters = AuthAdapters.getAdapters(
+        context?.getClass?.()?.prototype,
+        StringUtil.isFalsyString(handlerName) ? request.methodName : handlerName,
+      );
 
       try {
         if (Array.isArray(authAdapters) && authAdapters.length > 0) {
@@ -184,7 +190,7 @@ export class ControllerUtil {
             ? ''
             : createOptions!.prefix!
           : options!.prefix!;
-        finalPrefix += `/${_.camelCase(target.name.replace(/Controller$/g, ''))}`;
+        finalPrefix += `${finalPrefix?.endsWith?.('/') ? '' : '/'}${_.camelCase(target.name.replace(/Controller$/g, ''))}`;
         if (!finalPrefix.startsWith('/')) finalPrefix = `/${finalPrefix}`;
         Reflect.defineMetadata(IS_CONTROLLER, true, target.prototype);
         NestController(finalPrefix)(target);
