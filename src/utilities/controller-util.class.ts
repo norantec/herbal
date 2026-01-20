@@ -17,6 +17,7 @@ import { catchError, map } from 'rxjs/operators';
 import { LoggerService } from '../modules/logger/logger.service';
 import { Sequelize } from 'sequelize-typescript';
 import { Transaction } from 'sequelize';
+import { NoTransaction } from '../decorators';
 
 const IS_CONTROLLER = Symbol();
 
@@ -99,11 +100,6 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
     public async canActivate(context: ExecutionContext): Promise<boolean> {
       const sequelizeInstance = _.attempt(() => this.ref.get(Sequelize, { strict: false }));
       let transaction: Transaction | undefined = undefined;
-
-      if (!(sequelizeInstance instanceof Error)) {
-        transaction = await sequelizeInstance?.transaction?.()?.catch(() => Promise.resolve(undefined));
-      }
-
       const request: Request = context.switchToHttp().getRequest();
       const response: Response = context.switchToHttp().getResponse();
       let traceId =
@@ -115,7 +111,7 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
 
       request.traceId = traceId;
       request.methodName = request.url.split('/').pop()!;
-      request.transaction = transaction;
+      // request.transaction = transaction;
       response.setHeader(HEADERS.TRACE_ID, traceId);
 
       const chunks: Uint8Array[] = [];
@@ -134,11 +130,26 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
 
       _.attempt(() => this.getLogger().log(`[trace:${request?.traceId}:request:body] ${request.rawBody}`));
 
-      const handlerName = context?.getHandler?.()?.name;
-      const authAdapters = AuthAdapters.getAdapters(
-        context?.getClass?.()?.prototype,
-        StringUtil.isFalsyString(handlerName) ? request.methodName : handlerName,
-      );
+      const rawHandlerName = context?.getHandler?.()?.name;
+      const handlerPropertype = context?.getClass?.()?.prototype;
+      const handlerName = StringUtil.isFalsyString(rawHandlerName) ? request.methodName : rawHandlerName;
+      const authAdapters = AuthAdapters.getAdapters(handlerPropertype, handlerName);
+
+      if (!(sequelizeInstance instanceof Error) && !NoTransaction.isDisabled(handlerPropertype, handlerName)) {
+        try {
+          transaction = await sequelizeInstance?.transaction?.()?.catch(() => Promise.resolve(undefined));
+          request.transaction = transaction;
+          this.getLogger().log(`[trace:${request?.traceId}:transaction] Started transaction for route: ${handlerName}`);
+        } catch (e) {
+          this.getLogger().error(
+            `[trace:${request?.traceId}:transaction] Failed to start transaction: ${e?.message}\n${e?.stack}`,
+          );
+        }
+      } else if (NoTransaction.isDisabled(handlerPropertype, handlerName)) {
+        this.getLogger().log(
+          `[trace:${request?.traceId}:transaction] Transaction is disabled for this route: ${handlerName}`,
+        );
+      }
 
       try {
         if (Array.isArray(authAdapters) && authAdapters.length > 0) {
