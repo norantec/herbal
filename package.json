@@ -35,12 +35,16 @@
     "typescript": ">=5.1.0 <5.2.0"
   },
   "dependencies": {
+    "@alcalzone/esm2cjs": "^1.4.2",
+    "@babel/core": "^7.29.0",
+    "@babel/plugin-transform-modules-commonjs": "^7.28.6",
     "@nestjs/common": "^10.0.0",
     "@nestjs/core": "^10.4.19",
     "@nestjs/sequelize": "^10.0.1",
     "@open-norantec/forge": "latest",
     "@open-norantec/utilities": "latest",
     "commander": "^12.1.0",
+    "es-module-lexer": "^2.0.0",
     "esbuild": "^0.28.0",
     "fs-extra": "^11.3.4",
     "lodash": "^4.17.21",
@@ -60,6 +64,7 @@
   },
   "devDependencies": {
     "@stylistic/eslint-plugin": "^2.12.1",
+    "@types/babel__core": "^7.20.5",
     "@types/express": "^5.0.3",
     "@types/fs-extra": "^11.0.4",
     "@types/lodash": "^4.17.16",
