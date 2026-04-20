@@ -80,6 +80,7 @@ export class ClientUtil {
           '.node': 'base64',
         },
         logLevel: 'silent',
+        packages: 'external',
         format: 'cjs',
         write: false,
         plugins: [
@@ -241,6 +242,8 @@ export class ClientUtil {
         this.onLog?.('error', `Failed to load client code: ${error.message}`);
       }
     }
+
+    console.log('LENCONDA:test', client instanceof Client);
 
     if (!(typeof client?.generateClientSourceFile === 'function')) {
       this.onLog?.('error', 'Failed to load client code');
