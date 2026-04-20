@@ -113,12 +113,18 @@ export class ClientUtil {
             name: 'vfs',
             setup: (build) => {
               build.onResolve({ filter: /.*/ }, (args) => {
-                let fullPath = path.resolve(path.dirname(args.importer), args.path);
+                const fullPath = path.resolve(path.dirname(args.importer), args.path);
+                const attemptPaths: string[] = [];
 
-                if (!fullPath.endsWith('.js')) fullPath += '.js';
+                if (!fullPath.endsWith('.js')) {
+                  attemptPaths.push(`${fullPath}.js`);
+                  attemptPaths.push(path.resolve(fullPath, 'index.js'));
+                } else {
+                  attemptPaths.push(fullPath);
+                }
 
-                if (outputMap.has(fullPath)) {
-                  return { path: fullPath, namespace: 'vfs' };
+                for (const attemptPath of attemptPaths) {
+                  if (outputMap.has(attemptPath)) return { path: attemptPath, namespace: 'vfs' };
                 }
 
                 return { path: args.path, external: true };
