@@ -140,10 +140,12 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
           transaction = await sequelizeInstance?.transaction?.()?.catch(() => Promise.resolve(undefined));
           request.transaction = transaction;
           this.getLogger().log(`[trace:${request?.traceId}:transaction] Started transaction for route: ${handlerName}`);
-        } catch (e) {
-          this.getLogger().error(
-            `[trace:${request?.traceId}:transaction] Failed to start transaction: ${e?.message}\n${e?.stack}`,
-          );
+        } catch (error) {
+          if (error instanceof Error) {
+            this.getLogger().error(
+              `[trace:${request?.traceId}:transaction] Failed to start transaction: ${error?.message}\n${error?.stack}`,
+            );
+          }
         }
       } else if (NoTransaction.isDisabled(handlerPropertype, handlerName)) {
         this.getLogger().log(
@@ -168,7 +170,9 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
         }
       } catch (error) {
         try {
-          this.getLogger().error(`Got error when handling route: ${error?.message} ${error?.stack}`);
+          if (error instanceof Error) {
+            this.getLogger().error(`Got error when handling route: ${error?.message} ${error?.stack}`);
+          }
           await transaction?.rollback?.();
         } catch {}
         throw error;

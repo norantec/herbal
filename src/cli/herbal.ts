@@ -3,17 +3,26 @@
 import { Command } from 'commander';
 import { createForgeCommand, CreateForgeCommandOptions } from '@open-norantec/forge';
 import { Schema } from '@open-norantec/utilities/dist/schema-util.class';
+import { ClientUtil } from '../utilities';
+import * as _ from 'lodash';
+import * as fs from 'fs-extra';
+import * as path from 'node:path';
+import { AttemptUtil } from '@open-norantec/utilities/dist/attempt-util.class';
 
 const command = new Command('herbal');
 
 const getEntryFileContent: CreateForgeCommandOptions['getEntryFileContent'] = ({ entryFilePath }) => {
   return [
     "import 'reflect-metadata';",
-    "import { ModelUtil, NestFactory } from '@open-norantec/herbal';",
+    "import { ModelUtil, NestFactory, isApplication } from '@open-norantec/herbal';",
     "import { LoggerService } from '@open-norantec/herbal/dist/modules/logger/logger.service';",
     "import { Worker, isMainThread, workerData } from 'node:worker_threads';",
     `import ENTRY from '${entryFilePath}';`,
     '\nasync function bootstrap() {',
+    '  if (!isApplication(ENTRY)) {',
+    '    console.log(`The entry file must export an application or a function that returns an application.`);',
+    '    process.exit(1);',
+    '  }',
     '  const entryOptions = ENTRY?.options;',
     '  await entryOptions?.onBeforeBootstrap?.();',
     "\n  if (!!workerData?.['__herbal_worker']) {",
@@ -69,46 +78,6 @@ const getEntryFileContent: CreateForgeCommandOptions['getEntryFileContent'] = ({
   ].join('\n');
 };
 
-const getGenerateClientEntryFileContent: CreateForgeCommandOptions['getEntryFileContent'] = ({
-  entryFilePath,
-  outputPath,
-  options,
-}) => {
-  return [
-    "import 'reflect-metadata';",
-    `import ENTRY from '${entryFilePath}';`,
-    "import * as fs from 'node:fs';",
-    "import * as path from 'node:path';",
-    '\nasync function bootstrap() {',
-    `  const outputDirPath = '${outputPath}';`,
-    `  const outputFilePath = path.resolve(outputDirPath, '${options.outputName}.ts');`,
-    '  await ENTRY?.options?.onBeforeBootstrap?.();',
-    '  try {',
-    '    fs.rmSync(outputFilePath, {',
-    '      recursive: true,',
-    '      force: true,',
-    '    });',
-    '  } catch {}',
-    '  try {',
-    '    if (!fs.statSync(path.dirname(outputDirPath)).isDirectory()) {',
-    '      fs.rmSync(path.dirname(outputDirPath), {',
-    '        recursive: true,',
-    '        force: true,',
-    '      });',
-    '    }',
-    '  } catch {}',
-    '  try {',
-    '    fs.mkdirSync(outputDirPath, { recursive: true });',
-    '  } catch {}',
-    '  fs.writeFileSync(',
-    '    outputFilePath,',
-    '    ENTRY?.generateClientSourceFile?.(),',
-    '  );',
-    '}',
-    '\nbootstrap();',
-  ].join('\n');
-};
-
 const handleLog = (level: Schema.LogLevel, message?: string) => {
   console.log(`[${new Date().toISOString()}] [${level}] ${message}`);
   switch (level) {
@@ -139,16 +108,53 @@ command
     }).name('watch'),
   )
   .addCommand(
-    createForgeCommand({
-      onLog: handleLog,
-      getEntryFileContent: getGenerateClientEntryFileContent,
-      hideOptions: ['--after-emit-action', '--ts-compiler', '--mode'],
-      mode: 'production',
-      afterEmitAction: 'run-once',
-      tsCompiler: require.resolve('ts-patch/compiler', {
-        paths: [__dirname, process.cwd()],
-      }),
-    }).name('generate-client'),
+    (() => {
+      const subCommand = new Command('generate-client');
+
+      subCommand
+        .requiredOption(
+          '--entry <entry>',
+          'The entry file path of the application. It must export an instance generated with `createClient` to default.',
+        )
+        .requiredOption('--output-file <path>', 'The output file path of the generated client source file.')
+        .option(
+          '--group <group>',
+          'The group name of the generated client. It is used to distinguish different clients when there are multiple clients in the same application.',
+        )
+        .action(async (options) => {
+          const clientUtil = _.attempt(
+            () =>
+              new ClientUtil(
+                options,
+                (absoluteOutputFile, content) => {
+                  const absoluteOutputDir = path.dirname(absoluteOutputFile);
+                  if (!fs.existsSync(absoluteOutputDir) || !fs.statSync(absoluteOutputDir).isDirectory()) {
+                    _.attempt(() => fs.removeSync(absoluteOutputDir));
+                    _.attempt(() => fs.mkdirpSync(absoluteOutputDir));
+                  }
+                  const writeResult = AttemptUtil.exec(() =>
+                    fs.writeFileSync(absoluteOutputFile, content, { encoding: 'utf-8' }),
+                  );
+                  if (writeResult instanceof Error) {
+                    handleLog?.('error', `Failed to write client code: ${writeResult.message}`);
+                    return;
+                  }
+                  handleLog?.('info', `Client code generated successfully at ${absoluteOutputFile}`);
+                },
+                handleLog,
+              ),
+          );
+
+          if (clientUtil instanceof Error) {
+            handleLog('error', `Failed to initialize the client utility: ${clientUtil.message}`);
+            return;
+          }
+
+          await clientUtil.generateClientCode();
+        });
+
+      return subCommand;
+    })(),
   );
 
 command.parse(process.argv);
