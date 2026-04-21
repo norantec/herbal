@@ -6,7 +6,7 @@ import { Schema } from '@open-norantec/utilities/dist/schema-util.class';
 import * as _ from 'lodash';
 import * as fs from 'fs-extra';
 import * as path from 'node:path';
-import { Forge } from '@open-norantec/forge/dist/ng';
+import { Forge } from '@open-norantec/forge';
 import * as requireFromString from 'require-from-string';
 
 const command = new Command('herbal');
