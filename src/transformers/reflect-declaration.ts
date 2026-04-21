@@ -2,7 +2,7 @@ import * as ts from 'typescript';
 
 export const DECORATOR_NAME_PREFIX = 'Φnt:method:';
 
-export default function transformer(program: ts.Program): ts.TransformerFactory<ts.SourceFile> {
+export function transformer(program: ts.Program): ts.TransformerFactory<ts.SourceFile> {
   const checker = program.getTypeChecker();
 
   return () => {

@@ -8,6 +8,7 @@ import * as fs from 'fs-extra';
 import * as path from 'node:path';
 import { Forge } from '@open-norantec/forge';
 import * as requireFromString from 'require-from-string';
+import { transformer as transformReflectDeclaration } from '../transformers/reflect-declaration';
 
 const command = new Command('herbal');
 
@@ -170,6 +171,11 @@ command
         watch: false,
         executeAfterBuild: false,
         obfuscate: false,
+        customTransformers: (program) => {
+          return {
+            before: [transformReflectDeclaration(program)],
+          };
+        },
         getWatcher: handleGetWatcher,
         onGetFileContent: handleGetFileContent,
         onOutputFile: createHandleOutputFile(false),
