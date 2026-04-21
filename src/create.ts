@@ -5,7 +5,7 @@ import { Constructor } from 'type-fest';
 import { NestUtil } from './utilities/nest-util.class';
 import { StringUtil } from '@open-norantec/utilities/dist/string-util.class';
 import { DECORATOR_NAME_PREFIX } from './transformers/reflect-declaration';
-import { ClientGroups } from './decorators/client-groups.decorator';
+import { ClientGroups, GroupsFactory } from './decorators/client-groups.decorator';
 import {
   CanActivate,
   ExceptionFilter,
@@ -38,10 +38,7 @@ export interface CreateApplicationOptions {
 
 export interface CreateClientOptions {
   Module: Constructor<any>;
-  allowedClientGroupsFactory?: (
-    currentGroup: string | undefined,
-    defaultGroupName: string,
-  ) => string[] | null | undefined;
+  allowedClientGroupsFactory?: GroupsFactory;
 }
 
 class Application {
@@ -66,7 +63,7 @@ class TypeScriptClient extends Client implements Client {
     super(options);
   }
 
-  public generateClientSourceFile(currentGroup?: string) {
+  public generateClientSourceFile() {
     const options = this.options;
 
     if (!options?.Module) throw new Error("Parameter 'Module' must be specified");
@@ -100,7 +97,7 @@ class TypeScriptClient extends Client implements Client {
               StringUtil.isFalsyString(metadataName) ||
               !metadataName.startsWith(DECORATOR_NAME_PREFIX) ||
               !ClientGroups.shouldShowInClient(Class, methodName, (defaultGroupName) => {
-                return options.allowedClientGroupsFactory?.(currentGroup, defaultGroupName);
+                return options.allowedClientGroupsFactory?.(defaultGroupName);
               })
             ) {
               return result;

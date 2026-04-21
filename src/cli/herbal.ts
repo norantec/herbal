@@ -1,23 +1,35 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { createForgeCommand, CreateForgeCommandOptions } from '@open-norantec/forge';
+import { createCommand } from '@open-norantec/forge';
 import { Schema } from '@open-norantec/utilities/dist/schema-util.class';
-import { ClientUtil } from '../utilities';
 import * as _ from 'lodash';
 import * as fs from 'fs-extra';
 import * as path from 'node:path';
-import { AttemptUtil } from '@open-norantec/utilities/dist/attempt-util.class';
+import { Forge } from '@open-norantec/forge/dist/ng';
+import * as requireFromString from 'require-from-string';
 
 const command = new Command('herbal');
 
-const getEntryFileContent: CreateForgeCommandOptions['getEntryFileContent'] = ({ entryFilePath }) => {
+const log = (level: Schema.LogLevel, ...messages: string[]) => {
+  console.log(`[${new Date().toISOString()}] -${level}- ${messages?.join?.(' ') ?? ''}`);
+  switch (level) {
+    case 'error':
+      process.exit(1);
+    default:
+      break;
+  }
+};
+
+const handleGetVirtualEntryFileContent: ConstructorParameters<typeof Forge>[0]['getVirtualEntryFileContent'] = (
+  buildEntryFilePath,
+) => {
   return [
     "import 'reflect-metadata';",
     "import { ModelUtil, NestFactory, isApplication } from '@open-norantec/herbal';",
     "import { LoggerService } from '@open-norantec/herbal/dist/modules/logger/logger.service';",
     "import { Worker, isMainThread, workerData } from 'node:worker_threads';",
-    `import ENTRY from '${entryFilePath}';`,
+    `import ENTRY from '${buildEntryFilePath}';`,
     '\nasync function bootstrap() {',
     '  if (!isApplication(ENTRY)) {',
     '    console.log(`The entry file must export an application or a function that returns an application.`);',
@@ -78,83 +90,112 @@ const getEntryFileContent: CreateForgeCommandOptions['getEntryFileContent'] = ({
   ].join('\n');
 };
 
-const handleLog = (level: Schema.LogLevel, message?: string) => {
-  console.log(`[${new Date().toISOString()}] [${level}] ${message}`);
-  switch (level) {
-    case 'error':
-      process.exit(1);
-    default:
-      break;
+const handleGetFileContent: ConstructorParameters<typeof Forge>[0]['onGetFileContent'] = (filePath) => {
+  const content = _.attempt(() => fs.readFileSync(filePath, 'utf-8'));
+  if (content instanceof Error) {
+    log('error', `Failed to read file content for ${filePath}:`, content.message);
+    return '';
   }
+  return content;
 };
+
+const handleGetWatcher: ConstructorParameters<typeof Forge>[0]['getWatcher'] = (callback) => {
+  const watcher = fs.watch(process.cwd(), { recursive: true }, (eventType, filename) => {
+    callback(path.resolve(filename));
+  });
+  return { close: watcher.close.bind(watcher) };
+};
+
+const createHandleOutputFile: (disableWriteFile: boolean) => ConstructorParameters<typeof Forge>[0]['onOutputFile'] =
+  (disableWriteFile) => (filePath, content) => {
+    if (!disableWriteFile) {
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+        _.attempt(() => fs.removeSync(dir));
+        _.attempt(() => fs.mkdirpSync(dir));
+      }
+      _.attempt(() => fs.writeFileSync(filePath, content, 'utf-8'));
+      log('info', `Generated file: ${filePath}`);
+    }
+  };
 
 command
   .addCommand(
-    createForgeCommand({
-      onLog: handleLog,
-      getEntryFileContent,
-      hideOptions: ['--after-emit-action', '--ts-compiler', '--mode'],
-      mode: 'production',
-      afterEmitAction: 'none',
-    }).name('build'),
+    createCommand({
+      name: 'build',
+      hiddenOptions: ['--watch', '--execute-after-build'],
+      onLog: log,
+      defaultOptions: (source, output, options) => ({
+        getWatcher: handleGetWatcher,
+        getVirtualEntryFileContent: handleGetVirtualEntryFileContent,
+        onGetFileContent: handleGetFileContent,
+        onOutputFile: createHandleOutputFile(!!options?.disableWriteFile),
+      }),
+    })!,
   )
   .addCommand(
-    createForgeCommand({
-      onLog: handleLog,
-      getEntryFileContent,
-      hideOptions: ['--after-emit-action', '--ts-compiler'],
-      mode: 'development',
-      afterEmitAction: 'watch',
-    }).name('watch'),
+    createCommand({
+      name: 'watch',
+      hiddenOptions: [
+        '--watch',
+        '--execute-after-build',
+        '--obfuscate',
+        '--obfuscator-config-file <string>',
+        '--disable-write-file',
+      ],
+      onLog: log,
+      defaultOptions: () => ({
+        watch: true,
+        executeAfterBuild: true,
+        obfuscate: false,
+        getWatcher: handleGetWatcher,
+        getVirtualEntryFileContent: handleGetVirtualEntryFileContent,
+        onGetFileContent: handleGetFileContent,
+        onOutputFile: createHandleOutputFile(true),
+      }),
+    })!,
   )
   .addCommand(
-    (() => {
-      const subCommand = new Command('generate-client');
-
-      subCommand
-        .requiredOption(
-          '--entry <entry>',
-          'The entry file path of the application. It must export an instance generated with `createClient` to default.',
-        )
-        .requiredOption('--output-file <path>', 'The output file path of the generated client source file.')
-        .option(
-          '--group <group>',
-          'The group name of the generated client. It is used to distinguish different clients when there are multiple clients in the same application.',
-        )
-        .action(async (options) => {
-          const clientUtil = _.attempt(
-            () =>
-              new ClientUtil(
-                options,
-                (absoluteOutputFile, content) => {
-                  const absoluteOutputDir = path.dirname(absoluteOutputFile);
-                  if (!fs.existsSync(absoluteOutputDir) || !fs.statSync(absoluteOutputDir).isDirectory()) {
-                    _.attempt(() => fs.removeSync(absoluteOutputDir));
-                    _.attempt(() => fs.mkdirpSync(absoluteOutputDir));
-                  }
-                  const writeResult = AttemptUtil.exec(() =>
-                    fs.writeFileSync(absoluteOutputFile, content, { encoding: 'utf-8' }),
-                  );
-                  if (writeResult instanceof Error) {
-                    handleLog?.('error', `Failed to write client code: ${writeResult.message}`);
-                    return;
-                  }
-                  handleLog?.('info', `Client code generated successfully at ${absoluteOutputFile}`);
-                },
-                handleLog,
-              ),
-          );
-
-          if (clientUtil instanceof Error) {
-            handleLog('error', `Failed to initialize the client utility: ${clientUtil.message}`);
-            return;
+    createCommand({
+      name: 'generate-client',
+      onLog: log,
+      hiddenOptions: [
+        '--watch',
+        '--execute-after-build',
+        '--obfuscate',
+        '--obfuscator-config-file <string>',
+        '--disable-write-file',
+      ],
+      defaultOptions: () => ({
+        watch: false,
+        executeAfterBuild: false,
+        obfuscate: false,
+        getWatcher: handleGetWatcher,
+        onGetFileContent: handleGetFileContent,
+        onOutputFile: createHandleOutputFile(false),
+        getVirtualEntryFileContent: (buildEntryFilePath) => {
+          return [
+            `const entry = require(\'${buildEntryFilePath}\')`,
+            "const { Client } = require(\'@open-norantec/herbal\')",
+            'module.exports = () => {',
+            '  let client = entry;',
+            '  if (!(client instanceof Client)) { client = entry?.default; }',
+            "  if (!(client instanceof Client)) return '';",
+            "  try { return client?.generateClientSourceFile?.() ?? ''; } catch { return ''; }",
+            '};',
+          ].join('\n');
+        },
+        rewriteOutputFile: (code) => {
+          try {
+            const generateCodeMethod = requireFromString(code);
+            if (typeof generateCodeMethod !== 'function') return '';
+            return generateCodeMethod() as string;
+          } catch {
+            return '';
           }
-
-          await clientUtil.generateClientCode();
-        });
-
-      return subCommand;
-    })(),
+        },
+      }),
+    })!,
   );
 
 command.parse(process.argv);
