@@ -6,10 +6,12 @@ import * as _ from 'lodash';
 import { HttpResponseBody } from './types/http-response-body.type';
 import { Request } from './types/request.type';
 import { StringUtil } from '@open-norantec/utilities/dist/string-util.class';
+import { Method, MethodCallContext } from './decorators';
+import { AttemptUtil } from '@open-norantec/utilities';
 
 export * from '@nestjs/core';
 
-export interface MethodContext<IS extends z.Schema<any>> {
+interface LegacyMethodContext<IS extends z.Schema<any>> {
   headers: ReturnType<typeof HeaderUtil.parse>;
   input: z.infer<IS>;
   request: Request;
@@ -25,7 +27,7 @@ export class HerbalController {
   protected registerMethod = <IS extends z.Schema<any>, OS extends z.Schema<any>>(
     inputSchema: IS,
     outputSchema: OS,
-    callback: (context: MethodContext<IS>) => Promise<z.infer<OS>>,
+    callback: (context: LegacyMethodContext<IS>) => Promise<z.infer<OS>>,
   ): MethodHandler<IS, OS> => {
     return async (request, rawInput, headers) => {
       const input = inputSchema instanceof ZodAny ? rawInput : _.attempt(() => inputSchema.parse(rawInput));
@@ -49,33 +51,68 @@ export class HerbalController {
   };
 
   @Post('*')
-  private async handler(@Req() request: Request): Promise<HttpResponseBody<any>> {
-    const methodHandler: MethodHandler<z.Schema<any>, z.Schema<any>> = this[request?.methodName];
-    const parsedBody = _.attempt(() => JSON.parse(request?.rawBody || '') as Record<string, unknown>);
+  private async $handleRequest(@Req() request: Request): Promise<HttpResponseBody<any>> {
+    // const methodHandler: MethodHandler<z.Schema<any>, z.Schema<any>> = this[request?.methodName];
+    // const parsedBody = _.attempt(() => JSON.parse(request?.rawBody || '') as Record<string, unknown>);
+    // try {
+    //   if (typeof methodHandler === 'function') {
+    //     const result = {
+    //       data: await methodHandler(
+    //         request,
+    //         parsedBody instanceof Error ? undefined : parsedBody,
+    //         HeaderUtil.parse(request.headers ?? {}),
+    //       ).then((response) => response?.response),
+    //       token: StringUtil.isFalsyString(request?.authenticateResult?.nextToken)
+    //         ? null
+    //         : request.authenticateResult!.nextToken!,
+    //     };
+    //     try {
+    //       await request?.transaction?.commit?.();
+    //     } catch {}
+    //     return result;
+    //   } else {
+    //     try {
+    //       await request?.transaction?.rollback?.();
+    //     } catch {}
+    //     throw new NotFoundException();
+    //   }
+    // } catch (error) {
+    //   throw error;
+    // }
+
     try {
-      if (typeof methodHandler === 'function') {
-        const result = {
-          data: await methodHandler(
-            request,
-            parsedBody instanceof Error ? undefined : parsedBody,
-            HeaderUtil.parse(request.headers ?? {}),
-          ).then((response) => response?.response),
-          token: StringUtil.isFalsyString(request?.authenticateResult?.nextToken)
-            ? null
-            : request.authenticateResult!.nextToken!,
-        };
-        try {
-          await request?.transaction?.commit?.();
-        } catch {}
-        return result;
-      } else {
-        try {
-          await request?.transaction?.rollback?.();
-        } catch {}
-        throw new NotFoundException();
-      }
+      const result = {
+        data: await this.$call(request.methodName!, {
+          authenticateResult: request.authenticateResult,
+          headers: HeaderUtil.parse(request.headers ?? {}),
+          methodName: request.methodName,
+          rawBody: request.rawBody,
+          traceId: request.traceId,
+          transaction: request.transaction,
+          url: request.originalUrl,
+          getProvider: (token) => request.moduleRef.get(token, { strict: false }),
+        }),
+        token: StringUtil.isFalsyString(request?.authenticateResult?.nextToken)
+          ? null
+          : request.authenticateResult!.nextToken!,
+      };
+      await request?.transaction?.commit?.();
+      return result;
     } catch (error) {
+      await AttemptUtil.execPromise(
+        (async () => {
+          await request?.transaction?.rollback?.();
+        })(),
+      );
       throw error;
     }
+  }
+
+  private async $call<IS extends z.Schema<any>>(name: string, context: MethodCallContext<IS>) {
+    const methodConfig = Method.getPool(this)?.getConfig?.(name);
+    if (methodConfig === null || typeof methodConfig === 'undefined') {
+      throw new NotFoundException(`Method ${name} not found`);
+    }
+    return await methodConfig.call(context);
   }
 }

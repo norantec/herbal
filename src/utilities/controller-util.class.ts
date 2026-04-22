@@ -111,7 +111,7 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
 
       request.traceId = traceId;
       request.methodName = request.url.split('/').pop()!;
-      // request.transaction = transaction;
+      request.moduleRef = this.ref;
       response.setHeader(HEADERS.TRACE_ID, traceId);
 
       const chunks: Uint8Array[] = [];
