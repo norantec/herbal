@@ -19,10 +19,15 @@ import { Sequelize } from 'sequelize-typescript';
 import { Transaction } from 'sequelize';
 import { NoTransaction } from '../decorators';
 
-const IS_CONTROLLER = Symbol();
+const IS_HERBAL_CONTROLLER = Symbol();
+const CONTROLLER_NAME = Symbol();
 
 export function isHerbalController(target: Function) {
-  return _.attempt(() => Reflect.getMetadata(IS_CONTROLLER, target.prototype)) === true;
+  return _.attempt(() => Reflect.getMetadata(IS_HERBAL_CONTROLLER, target.prototype)) === true;
+}
+
+export function getControllerName(target: Function) {
+  return Reflect.getMetadata(CONTROLLER_NAME, target.prototype);
 }
 
 @Injectable()
@@ -205,9 +210,11 @@ export class ControllerUtil {
             ? ''
             : createOptions!.prefix!
           : options!.prefix!;
-        finalPrefix += `${finalPrefix?.endsWith?.('/') ? '' : '/'}${_.camelCase(target.name.replace(/Controller$/g, ''))}`;
+        const controllerName = _.camelCase(target.name.replace(/Controller$/g, ''));
+        finalPrefix += `${finalPrefix?.endsWith?.('/') ? '' : '/'}${controllerName}`;
         if (!finalPrefix.startsWith('/')) finalPrefix = `/${finalPrefix}`;
-        Reflect.defineMetadata(IS_CONTROLLER, true, target.prototype);
+        Reflect.defineMetadata(IS_HERBAL_CONTROLLER, true, target.prototype);
+        Reflect.defineMetadata(CONTROLLER_NAME, controllerName, target.prototype);
         NestController(finalPrefix)(target);
         UseInterceptors(ControllerInterceptor)(target);
         UseGuards(
@@ -218,7 +225,10 @@ export class ControllerUtil {
         )(target);
       };
     }
+
     Controller.isHerbalController = isHerbalController;
+    Controller.getControllerName = getControllerName;
+
     return Controller;
   }
 }
