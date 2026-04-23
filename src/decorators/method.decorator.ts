@@ -8,6 +8,8 @@ import { Constructor } from 'type-fest';
 import { BadRequestException, Type } from '@nestjs/common';
 import * as _ from 'lodash';
 import { RequestContext } from '../types';
+import { createSchema } from 'zod-openapi';
+import { PathsObject, SchemaObject } from 'zod-openapi/dist/openapi3-ts/dist/model/openapi31';
 
 const METHOD_POOL = Symbol();
 
@@ -37,7 +39,7 @@ export type MethodCallback<IS extends z.Schema<any>, OS extends z.Schema<any>> =
 class MethodConfig<IS extends z.Schema<any>, OS extends z.Schema<any>> {
   public constructor(
     public readonly name: string,
-    protected readonly options: MethodOptions<IS, OS>,
+    public readonly options: MethodOptions<IS, OS>,
     protected readonly callback: MethodCallback<IS, OS>,
   ) {}
 
@@ -86,9 +88,42 @@ class MethodPool {
     this.methods.set(name!, new MethodConfig(name, options, callback));
   }
 
-  public getConfig(name: string) {
-    const config = this.methods.get(name);
-    return config instanceof MethodConfig ? config : null;
+  public getCallFn(name: string) {
+    const callFn = this.methods.get(name)?.call;
+    return typeof callFn === 'function' ? callFn.bind(this) : null;
+  }
+
+  public getOpenAPIPathsObject() {
+    const result: PathsObject = {};
+    Array.from(this.methods.entries()).forEach(([name, config]) => {
+      result[`/${name}`] = {
+        post: {
+          requestBody: {
+            description: 'Request body for method ' + name,
+            required: true,
+            content: {
+              'application/json': {
+                schema: createSchema(config.options.inputSchema).schema as SchemaObject,
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'Response for method ' + name,
+              content: {
+                'application/json': createSchema(
+                  z.object({
+                    data: config.options.outputSchema,
+                    token: z.string().nullable(),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      };
+    });
+    return result;
   }
 }
 

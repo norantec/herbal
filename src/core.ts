@@ -109,10 +109,8 @@ export class HerbalController {
   }
 
   private async $call<IS extends z.Schema<any>>(name: string, context: MethodCallContext<IS>) {
-    const methodConfig = Method.getPool(this)?.getConfig?.(name);
-    if (methodConfig === null || typeof methodConfig === 'undefined') {
-      throw new NotFoundException(`Method ${name} not found`);
-    }
-    return await methodConfig.call(context);
+    const callFn = Method.getPool(this)?.getCallFn?.(name);
+    if (typeof callFn !== 'function') throw new NotFoundException(`Method ${name} not found`);
+    return await callFn(context);
   }
 }

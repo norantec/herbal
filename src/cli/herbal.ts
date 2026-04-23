@@ -182,12 +182,12 @@ command
         getVirtualEntryFileContent: (buildEntryFilePath) => {
           return [
             `const entry = require(\'${buildEntryFilePath}\')`,
-            "const { Client } = require(\'@open-norantec/herbal\')",
+            "const { isClient } = require(\'@open-norantec/herbal\')",
             'module.exports = () => {',
             '  let client = entry;',
-            '  if (!(client instanceof Client)) { client = entry?.default; }',
-            "  if (!(client instanceof Client)) return '';",
-            "  try { return client?.generateClientSourceFile?.() ?? ''; } catch { return ''; }",
+            '  if (!isClient(client)) { client = entry?.default; }',
+            "  if (!isClient(client)) return '';",
+            "  try { return client.instance.generateClientSourceFile() ?? ''; } catch (error) { throw error; }",
             '};',
           ].join('\n');
         },
