@@ -17,7 +17,7 @@ import { catchError, map } from 'rxjs/operators';
 import { LoggerService } from '../modules/logger/logger.service';
 import { Sequelize } from 'sequelize-typescript';
 import { Transaction } from 'sequelize';
-import { NoTransaction } from '../decorators';
+import { Method, NoTransaction } from '../decorators';
 
 const IS_HERBAL_CONTROLLER = Symbol();
 const CONTROLLER_NAME = Symbol();
@@ -138,7 +138,9 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
       const rawHandlerName = context?.getHandler?.()?.name;
       const handlerPropertype = context?.getClass?.()?.prototype;
       const handlerName = StringUtil.isFalsyString(rawHandlerName) ? request.methodName : rawHandlerName;
-      const authAdapters = AuthAdapters.getAdapters(handlerPropertype, handlerName);
+      let authAdapters = Method.getPool(handlerPropertype)?.getAuthAdapters?.(handlerName);
+
+      if (authAdapters === null) authAdapters = AuthAdapters.getAdapters(handlerPropertype, handlerName);
 
       if (!(sequelizeInstance instanceof Error) && !NoTransaction.isDisabled(handlerPropertype, handlerName)) {
         try {

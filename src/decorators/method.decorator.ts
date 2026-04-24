@@ -18,7 +18,7 @@ type ClienttGroupsFactory = (defaultGroupName: string) => ClientGroups;
 export interface MethodOptions<IS extends z.Schema<any>, OS extends z.Schema<any>> {
   inputSchema: IS;
   outputSchema: OS;
-  authAdapters?: AuthAdapter[];
+  authAdapters?: Constructor<AuthAdapter>[];
   clientGroups?: ClientGroups | ClienttGroupsFactory;
   disableTransaction?: boolean;
 }
@@ -46,11 +46,12 @@ class MethodConfig<IS extends z.Schema<any>, OS extends z.Schema<any>> {
   ) {}
 
   public async call(callContext: MethodCallContext<IS>) {
+    const inputSchema = this.options.inputSchema;
+    const outputSchema = this.options.outputSchema;
+
     try {
       const parsedBody = _.attempt(() => JSON.parse(callContext?.rawBody || '') as Record<string, unknown>);
-      const input = _.attempt(() =>
-        parsedBody instanceof Error ? undefined : this.options.inputSchema.parse(parsedBody),
-      );
+      const input = _.attempt(() => (parsedBody instanceof Error ? undefined : inputSchema.parse(parsedBody)));
 
       if (input instanceof ZodError) {
         throw new BadRequestException({
@@ -61,7 +62,7 @@ class MethodConfig<IS extends z.Schema<any>, OS extends z.Schema<any>> {
 
       const rawResponse = await this.callback({ ...callContext, input });
 
-      const response = _.attempt(() => this.options.outputSchema.parse(rawResponse));
+      const response = _.attempt(() => outputSchema.parse(rawResponse));
 
       if (response instanceof ZodError) {
         throw new BadRequestException({
@@ -91,8 +92,15 @@ class MethodPool {
   }
 
   public getCallFn(name: string) {
-    const callFn = this.methods.get(name)?.call;
-    return typeof callFn === 'function' ? callFn.bind(this) : null;
+    const config = this.methods.get(name);
+    if (!(config instanceof MethodConfig)) return null;
+    return config.call.bind(config) as typeof config.call;
+  }
+
+  public getAuthAdapters(name: string) {
+    const config = this.methods.get(name);
+    if (!(config instanceof MethodConfig)) return null;
+    return config.options.authAdapters;
   }
 
   public getOpenAPIPathsObject(group?: string) {
