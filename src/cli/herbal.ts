@@ -122,8 +122,7 @@ const createHandleOutputFile: (disableWriteFile: boolean) => ConstructorParamete
 
 command
   .addCommand(
-    createCommand({
-      name: 'build',
+    createCommand('build', {
       hiddenOptions: ['--watch', '--execute-after-build'],
       onLog: log,
       defaultOptions: (source, output, options) => ({
@@ -135,8 +134,7 @@ command
     })!,
   )
   .addCommand(
-    createCommand({
-      name: 'watch',
+    createCommand('watch', {
       hiddenOptions: [
         '--watch',
         '--execute-after-build',
@@ -157,50 +155,52 @@ command
     })!,
   )
   .addCommand(
-    createCommand({
-      name: 'generate-client',
-      onLog: log,
-      hiddenOptions: [
-        '--watch',
-        '--execute-after-build',
-        '--obfuscate',
-        '--obfuscator-config-file <string>',
-        '--disable-write-file',
-      ],
-      defaultOptions: () => ({
-        watch: false,
-        executeAfterBuild: false,
-        obfuscate: false,
-        customTransformers: (program) => {
-          return {
-            before: [transformReflectDeclaration(program)],
-          };
-        },
-        getWatcher: handleGetWatcher,
-        onGetFileContent: handleGetFileContent,
-        onOutputFile: createHandleOutputFile(false),
-        getVirtualEntryFileContent: (buildEntryFilePath) => {
-          return [
-            `const entry = require(\'${buildEntryFilePath}\')`,
-            "const { isClient } = require(\'@open-norantec/herbal\')",
-            'module.exports = () => {',
-            '  let client = entry;',
-            '  if (!isClient(client)) { client = entry?.default; }',
-            "  if (!isClient(client)) return '';",
-            "  try { return client.instance.generateClientSourceFile() ?? ''; } catch (error) { throw error; }",
-            '};',
-          ].join('\n');
-        },
-        rewriteOutputFile: (code) => {
-          try {
-            const generateCodeMethod = requireFromString(code);
-            if (typeof generateCodeMethod !== 'function') return '';
-            return generateCodeMethod() as string;
-          } catch {
-            return '';
-          }
-        },
-      }),
+    createCommand('generate-client', ({ addOption }) => {
+      addOption('--group', 'Client group name to generate');
+      return {
+        onLog: log,
+        hiddenOptions: [
+          '--watch',
+          '--execute-after-build',
+          '--obfuscate',
+          '--obfuscator-config-file <string>',
+          '--disable-write-file',
+        ],
+        defaultOptions: (source, output, options) => ({
+          watch: false,
+          executeAfterBuild: false,
+          obfuscate: false,
+          customTransformers: (program) => {
+            return {
+              before: [transformReflectDeclaration(program)],
+            };
+          },
+          getWatcher: handleGetWatcher,
+          onGetFileContent: handleGetFileContent,
+          onOutputFile: createHandleOutputFile(false),
+          getVirtualEntryFileContent: (buildEntryFilePath) => {
+            return [
+              `const entry = require(\'${buildEntryFilePath}\')`,
+              "const { isClient } = require(\'@open-norantec/herbal\')",
+              'module.exports = () => {',
+              '  let client = entry;',
+              '  if (!isClient(client)) { client = entry?.default; }',
+              "  if (!isClient(client)) return '';",
+              "  try { return client.instance.generateClientSourceFile() ?? ''; } catch (error) { throw error; }",
+              '};',
+            ].join('\n');
+          },
+          rewriteOutputFile: (code) => {
+            try {
+              const generateCodeMethod = requireFromString(code);
+              if (typeof generateCodeMethod !== 'function') return '';
+              return generateCodeMethod({ group: options?.group }) as string;
+            } catch {
+              return '';
+            }
+          },
+        }),
+      };
     })!,
   );
 
