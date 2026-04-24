@@ -156,7 +156,7 @@ command
   )
   .addCommand(
     createCommand('generate-client', ({ addOption }) => {
-      addOption('--group', 'Client group name to generate');
+      addOption('--group <name>', 'Client group name to generate');
       return {
         onLog: log,
         hiddenOptions: [
@@ -182,11 +182,12 @@ command
             return [
               `const entry = require(\'${buildEntryFilePath}\')`,
               "const { isClient } = require(\'@open-norantec/herbal\')",
-              'module.exports = () => {',
+              'module.exports = (context) => {',
               '  let client = entry;',
               '  if (!isClient(client)) { client = entry?.default; }',
               "  if (!isClient(client)) return '';",
-              "  try { return client.instance.generateClientSourceFile() ?? ''; } catch (error) { throw error; }",
+              '  client.instance.createSchema(context?.group);',
+              "  return client.instance.generateClientSourceFile() ?? '';",
               '};',
             ].join('\n');
           },

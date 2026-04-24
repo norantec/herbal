@@ -8,7 +8,7 @@ import {
 import { Client, CreateClientOptions } from '../abstracts/client.abstract.class';
 import { NestUtil } from '../utilities/nest-util.class';
 import { StringUtil } from '@open-norantec/utilities/dist/string-util.class';
-import { getControllerName, isHerbalController } from '../utilities/controller-util.class';
+import { isHerbalController } from '../utilities/controller-util.class';
 import { Method } from '../decorators/method.decorator';
 
 namespace OpenApiToTypescript {
@@ -296,7 +296,7 @@ export function convertOpenApiToTypescript(
 }
 
 export class TypeScriptClient extends Client implements Client {
-  public constructor(public readonly options: CreateClientOptions) {
+  public constructor(options: CreateClientOptions) {
     super(options);
   }
 
@@ -319,13 +319,12 @@ export class TypeScriptClient extends Client implements Client {
       .reduce((result, Class) => {
         if (StringUtil.isFalsyString(Class?.name) || !isHerbalController(Class)) return result;
 
-        const controllerName = getControllerName(Class);
         const pool = Method.getPool(Class.prototype);
 
-        if (StringUtil.isFalsyString(controllerName) || pool === null) return result;
+        if (pool === null) return result;
 
         return result.concat(
-          Object.entries(pool.getOpenAPIPathsObject())
+          Object.entries(this.document.paths ?? {})
             .map(([pathname, schema]) => {
               const requestSchema = (schema?.post?.requestBody as RequestBodyObject)?.content?.['application/json']
                 ?.schema;
@@ -335,7 +334,7 @@ export class TypeScriptClient extends Client implements Client {
               if (!requestSchema && !responseSchema) return null;
 
               return [
-                `'/${controllerName}${pathname}': {`,
+                `'${pathname}': {`,
                 ` request: ${convertOpenApiToTypescript(requestSchema as SchemaObject)?.code || 'any'};`,
                 ` response: ${convertOpenApiToTypescript(responseSchema as SchemaObject)?.code || 'any'};`,
                 ' };',
@@ -344,7 +343,7 @@ export class TypeScriptClient extends Client implements Client {
             .filter((value) => value !== null) as string[],
         );
       }, [] as string[])
-      .map((line) => `    ${line}`);
+      .map((line) => `  ${line}`);
 
     methodTypeMapCodeLines.unshift(`export interface ${METHOD_TYPE_MAP_NAME} {`);
     methodTypeMapCodeLines.push('}');

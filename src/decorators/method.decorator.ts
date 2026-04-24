@@ -1,7 +1,6 @@
 import 'reflect-metadata';
 import { ZodError, z } from 'zod';
 import { AuthAdapter } from '../abstracts';
-import { GroupsFactory } from './client-groups.decorator';
 import { HeaderUtil } from '@open-norantec/utilities/dist/header-util.class';
 import { StringUtil } from '@open-norantec/utilities';
 import { Constructor } from 'type-fest';
@@ -13,11 +12,14 @@ import { PathsObject, SchemaObject } from 'zod-openapi/dist/openapi3-ts/dist/mod
 
 const METHOD_POOL = Symbol();
 
+type ClientGroups = Array<string> | null | undefined;
+type ClienttGroupsFactory = (defaultGroupName: string) => ClientGroups;
+
 export interface MethodOptions<IS extends z.Schema<any>, OS extends z.Schema<any>> {
   inputSchema: IS;
   outputSchema: OS;
   authAdapters?: AuthAdapter[];
-  clientGroups?: GroupsFactory | string[];
+  clientGroups?: ClientGroups | ClienttGroupsFactory;
   disableTransaction?: boolean;
 }
 
@@ -93,9 +95,18 @@ class MethodPool {
     return typeof callFn === 'function' ? callFn.bind(this) : null;
   }
 
-  public getOpenAPIPathsObject() {
+  public getOpenAPIPathsObject(group?: string) {
     const result: PathsObject = {};
     Array.from(this.methods.entries()).forEach(([name, config]) => {
+      const defaultGroupName = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const currentGroupName = StringUtil.isFalsyString(group) ? defaultGroupName : group!;
+      const clientGroups =
+        typeof config.options.clientGroups === 'function'
+          ? config.options.clientGroups(defaultGroupName)
+          : config?.options?.clientGroups;
+
+      if (Array.isArray(clientGroups) && !clientGroups.includes(currentGroupName)) return;
+
       result[`/${name}`] = {
         post: {
           requestBody: {
