@@ -2,9 +2,8 @@ import 'reflect-metadata';
 import { Constructor } from 'type-fest';
 import { NestUtil } from '../utilities/nest-util.class';
 import { StringUtil } from '@open-norantec/utilities/dist/string-util.class';
-import { getControllerName, isHerbalController } from '../utilities/controller-util.class';
+import { ControllerUtil, getControllerName, isHerbalController } from '../utilities/controller-util.class';
 import { OpenAPIObject } from 'zod-openapi/dist/openapi3-ts/dist/model/openapi31';
-import { Method } from '../decorators/method.decorator';
 
 export interface CreateClientOptions {
   Module: Constructor<any>;
@@ -29,7 +28,7 @@ export abstract class Client {
     NestUtil.getControllerClasses(this.options.Module).forEach((Class) => {
       if (StringUtil.isFalsyString(Class?.name) || !isHerbalController(Class)) return;
       const controllerName = getControllerName(Class);
-      const pool = Method.getPool(Class.prototype);
+      const pool = ControllerUtil.getPool(Class.prototype);
       if (StringUtil.isFalsyString(controllerName) || pool === null) return;
       Object.entries(pool.getOpenAPIPathsObject(group)).forEach(([pathname, schemas]) => {
         this.document.paths![[`/${controllerName}`, pathname].join('')] = schemas;

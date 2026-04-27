@@ -1,13 +1,14 @@
 import 'reflect-metadata';
-import { BadRequestException, NotFoundException, Post, Req } from '@nestjs/common';
+import { BadRequestException, Inject, NotFoundException, Post, Req } from '@nestjs/common';
 import { HeaderUtil } from '@open-norantec/utilities/dist/header-util.class';
 import { z, ZodAny, ZodError } from 'zod';
 import * as _ from 'lodash';
 import { HttpResponseBody } from './types/http-response-body.type';
 import { Request } from './types/request.type';
 import { StringUtil } from '@open-norantec/utilities/dist/string-util.class';
-import { Method, MethodCallContext } from './decorators';
 import { AttemptUtil } from '@open-norantec/utilities';
+import { ModuleRef } from '@nestjs/core';
+import { ControllerUtil, MethodCallContext } from './utilities/controller-util.class';
 
 export * from '@nestjs/core';
 
@@ -50,6 +51,9 @@ export class HerbalController {
     };
   };
 
+  @Inject(ModuleRef)
+  protected moduleRef!: ModuleRef;
+
   @Post('*')
   private async $handleRequest(@Req() request: Request): Promise<HttpResponseBody<any>> {
     // const methodHandler: MethodHandler<z.Schema<any>, z.Schema<any>> = this[request?.methodName];
@@ -90,7 +94,7 @@ export class HerbalController {
           traceId: request.traceId,
           transaction: request.transaction,
           url: request.originalUrl,
-          getProvider: (token) => request.moduleRef.get(token, { strict: false }),
+          controller: this,
         }),
         token: StringUtil.isFalsyString(request?.authenticateResult?.nextToken)
           ? null
@@ -108,8 +112,8 @@ export class HerbalController {
     }
   }
 
-  private async $call<IS extends z.Schema<any>>(name: string, context: MethodCallContext<IS>) {
-    const callFn = Method.getPool(this)?.getCallFn?.(name);
+  private async $call<IS extends z.Schema<any>>(name: string, context: MethodCallContext<IS, typeof this>) {
+    const callFn = ControllerUtil.getPool(this)?.getCallFn?.(name);
     if (typeof callFn !== 'function') throw new NotFoundException(`Method ${name} not found`);
     return await callFn(context);
   }

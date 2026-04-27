@@ -6,10 +6,6 @@ import {
   ResponseObject,
 } from 'zod-openapi/dist/openapi3-ts/dist/model/openapi31';
 import { Client, CreateClientOptions } from '../abstracts/client.abstract.class';
-import { NestUtil } from '../utilities/nest-util.class';
-import { StringUtil } from '@open-norantec/utilities/dist/string-util.class';
-import { isHerbalController } from '../utilities/controller-util.class';
-import { Method } from '../decorators/method.decorator';
 
 namespace OpenApiToTypescript {
   export interface Options {
@@ -314,36 +310,24 @@ export class TypeScriptClient extends Client implements Client {
     const RESPONSE_CACHE_MAP_NAME = 'RESPONSE_CACHE_MAP';
     const REQUEST_BODY_TYPE_ANNOTATION = `${METHOD_TYPE_MAP_NAME}[T]['request']`;
     const RESULT_TYPE_ANNOTATION = `${RESULT_TYPE_NAME}<${METHOD_TYPE_MAP_NAME}[T]['response']>`;
+    const methodTypeMapCodeLines = (
+      Object.entries(this.document.paths ?? {})
+        .map(([pathname, schema]) => {
+          const requestSchema = (schema?.post?.requestBody as RequestBodyObject)?.content?.['application/json']?.schema;
+          const responseSchema = (schema?.post?.responses?.['200'] as ResponseObject)?.content?.['application/json']
+            ?.schema;
 
-    const methodTypeMapCodeLines = NestUtil.getControllerClasses(options.Module)
-      .reduce((result, Class) => {
-        if (StringUtil.isFalsyString(Class?.name) || !isHerbalController(Class)) return result;
+          if (!requestSchema && !responseSchema) return null;
 
-        const pool = Method.getPool(Class.prototype);
-
-        if (pool === null) return result;
-
-        return result.concat(
-          Object.entries(this.document.paths ?? {})
-            .map(([pathname, schema]) => {
-              const requestSchema = (schema?.post?.requestBody as RequestBodyObject)?.content?.['application/json']
-                ?.schema;
-              const responseSchema = (schema?.post?.responses?.['200'] as ResponseObject)?.content?.['application/json']
-                ?.schema;
-
-              if (!requestSchema && !responseSchema) return null;
-
-              return [
-                `'${pathname}': {`,
-                ` request: ${convertOpenApiToTypescript(requestSchema as SchemaObject)?.code || 'any'};`,
-                ` response: ${convertOpenApiToTypescript(responseSchema as SchemaObject)?.code || 'any'};`,
-                ' };',
-              ].join('');
-            })
-            .filter((value) => value !== null) as string[],
-        );
-      }, [] as string[])
-      .map((line) => `  ${line}`);
+          return [
+            `'${pathname}': {`,
+            ` request: ${convertOpenApiToTypescript(requestSchema as SchemaObject)?.code || 'any'};`,
+            ` response: ${convertOpenApiToTypescript(responseSchema as SchemaObject)?.code || 'any'};`,
+            ' };',
+          ].join('');
+        })
+        .filter((value) => value !== null) as string[]
+    ).map((line) => `  ${line}`);
 
     methodTypeMapCodeLines.unshift(`export interface ${METHOD_TYPE_MAP_NAME} {`);
     methodTypeMapCodeLines.push('}');
