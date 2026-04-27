@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { BadRequestException, Inject, NotFoundException, Post, Req } from '@nestjs/common';
+import { BadRequestException, NotFoundException, Post, Req } from '@nestjs/common';
 import { HeaderUtil } from '@open-norantec/utilities/dist/header-util.class';
 import { z, ZodAny, ZodError } from 'zod';
 import * as _ from 'lodash';
@@ -7,7 +7,6 @@ import { HttpResponseBody } from './types/http-response-body.type';
 import { Request } from './types/request.type';
 import { StringUtil } from '@open-norantec/utilities/dist/string-util.class';
 import { AttemptUtil } from '@open-norantec/utilities';
-import { ModuleRef } from '@nestjs/core';
 import { ControllerUtil, MethodCallContext } from './utilities/controller-util.class';
 
 export * from '@nestjs/core';
@@ -50,9 +49,6 @@ export class HerbalController {
       };
     };
   };
-
-  @Inject(ModuleRef)
-  protected moduleRef!: ModuleRef;
 
   @Post('*')
   private async $handleRequest(@Req() request: Request): Promise<HttpResponseBody<any>> {
