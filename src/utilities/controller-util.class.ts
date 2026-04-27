@@ -239,7 +239,6 @@ class ControllerInterceptor implements NestInterceptor {
 }
 
 export interface HerbalControllerOptions<C> {
-  ControllerClass: Constructor<C>;
   prefix?: string;
   useHeadGuards?: Constructor<any>[];
   useTailGuards?: Constructor<any>[];
