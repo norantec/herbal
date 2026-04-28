@@ -8,7 +8,6 @@ export * from './constants';
 export * from './decorators';
 export * from './utilities';
 export * from '@nestjs/sequelize';
-export * from './clients';
 
 export { Response } from 'express';
 export { Request } from './types';
