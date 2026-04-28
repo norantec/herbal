@@ -90,7 +90,6 @@ export class HerbalController {
           traceId: request.traceId,
           transaction: request.transaction,
           url: request.originalUrl,
-          controller: this,
         }),
         token: StringUtil.isFalsyString(request?.authenticateResult?.nextToken)
           ? null
@@ -108,9 +107,9 @@ export class HerbalController {
     }
   }
 
-  private async $call<IS extends z.Schema<any>>(name: string, context: MethodCallContext<IS, typeof this>) {
+  private async $call<IS extends z.Schema<any>>(name: string, context: MethodCallContext<IS>) {
     const callFn = ControllerUtil.getPool(this)?.getCallFn?.(name);
     if (typeof callFn !== 'function') throw new NotFoundException(`Method ${name} not found`);
-    return await callFn(context);
+    return await callFn(this, context);
   }
 }

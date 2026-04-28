@@ -21,7 +21,7 @@ export abstract class Client {
 
   public constructor(public readonly options: CreateClientOptions) {}
 
-  public abstract generateClientSourceFile(): string;
+  public abstract generateClientSourceFile(): Promise<string>;
 
   public createSchema(group?: string) {
     if (StringUtil.isFalsyString(group) && typeof group !== 'undefined') return;

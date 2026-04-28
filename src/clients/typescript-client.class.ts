@@ -1,302 +1,14 @@
 import 'reflect-metadata';
-import {
-  SchemaObject,
-  ReferenceObject,
-  RequestBodyObject,
-  ResponseObject,
-} from 'zod-openapi/dist/openapi3-ts/dist/model/openapi31';
+import { SchemaObject, RequestBodyObject, ResponseObject } from 'zod-openapi/dist/openapi3-ts/dist/model/openapi31';
 import { Client, CreateClientOptions } from '../abstracts/client.abstract.class';
-
-namespace OpenApiToTypescript {
-  export interface Options {
-    /**
-     * @description
-     * Whether to use 'interface' instead of 'type' for object definitions
-     */
-    useInterface?: boolean;
-    /**
-     * @description
-     * Whether to export the generated types
-     */
-    export?: boolean;
-    /**
-     * @description
-     * Whether to generate JSDoc comments from schema descriptions
-     */
-    generateJSDoc?: boolean;
-    /**
-     * @description
-     * Whether to use 'unknown' instead of 'any' for unspecified types
-     */
-    preferUnknown?: boolean;
-    /**
-     * @description
-     * Whether to generate code in a single line (no newlines)
-     */
-    singleLine?: boolean;
-  }
-
-  export interface TypeResult {
-    code: string;
-    name?: string;
-  }
-}
-
-type SchemaOrRef = SchemaObject | ReferenceObject;
-
-class OpenApiToTypescriptConverter {
-  private options: Required<OpenApiToTypescript.Options>;
-
-  constructor(options: OpenApiToTypescript.Options = {}) {
-    this.options = {
-      useInterface: false,
-      export: true,
-      generateJSDoc: true,
-      preferUnknown: true,
-      singleLine: true,
-      ...options,
-    };
-  }
-
-  /**
-   * @description
-   * Convert an OpenAPI schema to TypeScript type declaration
-   */
-  convert(schema: SchemaObject, name?: string): OpenApiToTypescript.TypeResult {
-    const typeString = this.parseSchema(schema, 0, name);
-
-    if (name) {
-      const exportKeyword = this.options.export ? 'export ' : '';
-      if (this.options.useInterface && schema.type === 'object' && schema.properties) {
-        const code = `${exportKeyword}${typeString}`;
-        return { code, name };
-      }
-      const code = `${exportKeyword}type ${name} = ${typeString};`;
-      return { code, name };
-    }
-
-    return { code: typeString };
-  }
-
-  /**
-   * @description
-   * Generate TypeScript types from multiple named OpenAPI schemas
-   */
-  generateTypes(schemas?: Record<string, SchemaObject>): string {
-    if (!schemas) return '';
-
-    const lines: string[] = [];
-
-    Object.entries(schemas).forEach(([name, schema]) => {
-      const result = this.convert(schema, name);
-      lines.push(result.code);
-    });
-
-    return lines.join('\n');
-  }
-
-  /**
-   * @description
-   * Convert Zod schema to TypeScript type declaration (convenience method)
-   */
-  static fromZodResult(
-    result: { schema: SchemaObject },
-    name?: string,
-    options?: OpenApiToTypescript.Options,
-  ): OpenApiToTypescript.TypeResult {
-    const converter = new OpenApiToTypescriptConverter(options);
-    return converter.convert(result.schema, name);
-  }
-
-  private parseSchema(schema: SchemaOrRef, depth: number = 0, name?: string): string {
-    // Handle $ref
-    if ('$ref' in schema && typeof schema.$ref === 'string') {
-      return this.refToTypeName(schema.$ref);
-    }
-
-    const s = schema as SchemaObject;
-
-    // Handle oneOf, anyOf, allOf
-    if (s.oneOf) {
-      return this.parseOneOf(s.oneOf, depth);
-    }
-    if (s.anyOf) {
-      return this.parseAnyOf(s.anyOf, depth);
-    }
-    if (s.allOf) {
-      return this.parseAllOf(s.allOf, depth);
-    }
-
-    // Handle different types
-    switch (s.type) {
-      case 'object':
-        return this.parseObject(s, depth, name);
-      case 'array':
-        return this.parseArray(s, depth);
-      case 'string':
-        return this.parseString(s);
-      case 'integer':
-      case 'number':
-        return 'number';
-      case 'boolean':
-        return 'boolean';
-      default:
-        // Handle enum
-        if (s.enum) {
-          return this.parseEnum(s.enum);
-        }
-        if (Array.isArray(s.type)) {
-          return s.type.join(' | ');
-        }
-        // Empty object means any/unknown
-        if (Object.keys(s).length === 0 || (s.type === undefined && !s.enum)) {
-          return this.options.preferUnknown ? 'unknown' : 'any';
-        }
-        return this.options.preferUnknown ? 'unknown' : 'any';
-    }
-  }
-
-  private parseObject(schema: SchemaObject, depth: number, name?: string): string {
-    // Handle additionalProperties (Record type)
-    if (schema.additionalProperties && !schema.properties) {
-      if (typeof schema.additionalProperties === 'boolean') {
-        return 'Record<string, unknown>';
-      }
-      const valueType = this.parseSchema(schema.additionalProperties as SchemaObject, depth);
-      return `Record<string, ${valueType}>`;
-    }
-
-    const properties = schema.properties || {};
-    const required = schema.required || [];
-
-    if (Object.keys(properties).length === 0) {
-      if (schema.additionalProperties) {
-        if (typeof schema.additionalProperties === 'boolean') {
-          return 'Record<string, unknown>';
-        }
-        const valueType = this.parseSchema(schema.additionalProperties as SchemaObject, depth);
-        return `Record<string, ${valueType}>`;
-      }
-      return 'Record<string, never>';
-    }
-
-    // If using interface and this is a named schema
-    if (this.options.useInterface && name && depth === 0) {
-      const props: string[] = [];
-      Object.entries(properties).forEach(([key, propSchema]) => {
-        const isRequired = required.includes(key);
-        const tsType = this.parseSchema(propSchema, depth + 1);
-        const optional = isRequired ? '' : '?';
-        props.push(`${key}${optional}: ${tsType}`);
-      });
-      return `interface ${name} { ${props.join('; ')} }`;
-    }
-
-    // Generate inline object type (single line)
-    const props: string[] = [];
-    Object.entries(properties).forEach(([key, propSchema]) => {
-      const isRequired = required.includes(key);
-      const tsType = this.parseSchema(propSchema, depth + 1);
-      const optional = isRequired ? '' : '?';
-      props.push(`${key}${optional}: ${tsType}`);
-    });
-
-    return `{ ${props.join('; ')} }`;
-  }
-
-  private parseArray(schema: SchemaObject, depth: number): string {
-    const items = schema.items;
-
-    if (!items) {
-      return 'unknown[]';
-    }
-
-    // Handle tuple-like arrays
-    if (Array.isArray(items)) {
-      const types = items.map((item) => this.parseSchema(item as SchemaOrRef, depth));
-      return `[${types.join(', ')}]`;
-    }
-
-    const itemType = this.parseSchema(items as SchemaOrRef, depth);
-
-    // Check if we need parentheses for union types
-    if (itemType.includes('|') || itemType.includes('&')) {
-      return `(${itemType})[]`;
-    }
-
-    return `${itemType}[]`;
-  }
-
-  private parseString(schema: SchemaObject): string {
-    // If it's a string enum with single value, return literal type
-    if (schema.enum) {
-      return this.parseEnum(schema.enum);
-    }
-    return 'string';
-  }
-
-  private parseEnum(values: (string | number | boolean | null)[]): string {
-    const literals = values.map((v) => {
-      if (v === null) return 'null';
-      if (typeof v === 'string') {
-        return `'${v.replace(/'/g, "\\'")}'`;
-      }
-      return String(v);
-    });
-    return literals.join(' | ');
-  }
-
-  private parseOneOf(schemas: SchemaOrRef[], depth: number): string {
-    const types = schemas.map((s) => this.parseSchema(s, depth));
-    return types.join(' | ');
-  }
-
-  private parseAnyOf(schemas: SchemaOrRef[], depth: number): string {
-    const types = schemas.map((s) => this.parseSchema(s, depth));
-    return types.join(' | ');
-  }
-
-  private parseAllOf(schemas: SchemaOrRef[], depth: number): string {
-    const types = schemas.map((s) => {
-      const parsed = this.parseSchema(s, depth);
-      return parsed;
-    });
-
-    // Filter out duplicates and join
-    const uniqueTypes = [...Array.from(new Set(types))];
-    if (uniqueTypes.length === 1) {
-      return uniqueTypes[0];
-    }
-
-    return uniqueTypes.join(' & ');
-  }
-
-  private refToTypeName(ref: string): string {
-    // Convert #/components/schemas/User to User
-    const parts = ref.split('/');
-    return parts[parts.length - 1] || 'unknown';
-  }
-}
-
-/**
- * @description
- * Convert an OpenAPI schema object to TypeScript type declaration
- */
-export function convertOpenApiToTypescript(
-  schema: SchemaObject,
-  name?: string,
-  options?: OpenApiToTypescript.Options,
-): OpenApiToTypescript.TypeResult {
-  const converter = new OpenApiToTypescriptConverter(options);
-  return converter.convert(schema, name);
-}
+import { compile } from 'json-schema-to-typescript';
 
 export class TypeScriptClient extends Client implements Client {
   public constructor(options: CreateClientOptions) {
     super(options);
   }
 
-  public generateClientSourceFile() {
+  public async generateClientSourceFile() {
     const options = this.options;
 
     if (!options?.Module) throw new Error("Parameter 'Module' must be specified");
@@ -310,24 +22,22 @@ export class TypeScriptClient extends Client implements Client {
     const RESPONSE_CACHE_MAP_NAME = 'RESPONSE_CACHE_MAP';
     const REQUEST_BODY_TYPE_ANNOTATION = `${METHOD_TYPE_MAP_NAME}[T]['request']`;
     const RESULT_TYPE_ANNOTATION = `${RESULT_TYPE_NAME}<${METHOD_TYPE_MAP_NAME}[T]['response']>`;
-    const methodTypeMapCodeLines = (
-      Object.entries(this.document.paths ?? {})
-        .map(([pathname, schema]) => {
-          const requestSchema = (schema?.post?.requestBody as RequestBodyObject)?.content?.['application/json']?.schema;
-          const responseSchema = (schema?.post?.responses?.['200'] as ResponseObject)?.content?.['application/json']
-            ?.schema;
+    const methodTypeMapCodeLines: string[] = [];
 
-          if (!requestSchema && !responseSchema) return null;
+    for (const [pathname, schema] of Object.entries(this.document.paths ?? {})) {
+      const requestSchema = (schema?.post?.requestBody as RequestBodyObject)?.content?.['application/json']?.schema;
+      const responseSchema = (schema?.post?.responses?.['200'] as ResponseObject)?.content?.['application/json']
+        ?.schema;
 
-          return [
-            `'${pathname}': {`,
-            ` request: ${convertOpenApiToTypescript(requestSchema as SchemaObject)?.code || 'any'};`,
-            ` response: ${convertOpenApiToTypescript(responseSchema as SchemaObject)?.code || 'any'};`,
-            ' };',
-          ].join('');
-        })
-        .filter((value) => value !== null) as string[]
-    ).map((line) => `  ${line}`);
+      if (!requestSchema && !responseSchema) continue;
+
+      const requestTypeLiteral = await this.schemaToTypeScriptLiteral(requestSchema as SchemaObject);
+      const responseTypeLiteral = await this.schemaToTypeScriptLiteral(responseSchema as SchemaObject);
+
+      methodTypeMapCodeLines.push(
+        [`'${pathname}': {`, ` request: ${requestTypeLiteral};`, ` response: ${responseTypeLiteral};`, ' };'].join(''),
+      );
+    }
 
     methodTypeMapCodeLines.unshift(`export interface ${METHOD_TYPE_MAP_NAME} {`);
     methodTypeMapCodeLines.push('}');
@@ -429,5 +139,26 @@ export class TypeScriptClient extends Client implements Client {
       '  }',
       '}\n',
     ].join('\n');
+  }
+
+  private async schemaToTypeScriptLiteral(schema: SchemaObject) {
+    const interfaceName = `Interface_${Math.random().toString(36).slice(2)}`;
+    return await compile(schema as Parameters<typeof compile>[0], interfaceName, {
+      format: true,
+      bannerComment: '',
+      additionalProperties: false,
+      style: {
+        singleQuote: true,
+        semi: true,
+        trailingComma: 'none',
+      },
+    }).then((code) => {
+      return code
+        .trim()
+        .split('\n')
+        .map((line, index) => `${index === 0 ? '' : ' '}${line.trim()}`)
+        .join('')
+        .slice(`export interface ${interfaceName} `.length);
+    });
   }
 }

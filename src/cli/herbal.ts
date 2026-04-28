@@ -187,15 +187,17 @@ command
               '  if (!isClient(client)) { client = entry?.default; }',
               "  if (!isClient(client)) return '';",
               '  client.instance.createSchema(context?.group);',
-              "  return client.instance.generateClientSourceFile() ?? '';",
+              '  return client.instance.generateClientSourceFile();',
               '};',
             ].join('\n');
           },
-          rewriteOutputFile: (code) => {
+          rewriteOutputFile: async (code) => {
             try {
               const generateCodeMethod = requireFromString(code);
               if (typeof generateCodeMethod !== 'function') return '';
-              return generateCodeMethod({ group: options?.group }) as string;
+              return await Promise.resolve(generateCodeMethod({ group: options?.group })).then(
+                (generatedCode) => generatedCode ?? '',
+              );
             } catch {
               return '';
             }

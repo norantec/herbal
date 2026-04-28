@@ -47,17 +47,17 @@ export type MethodRegisterFn<C> = <IS extends z.Schema<any>, OS extends z.Schema
   callback: MethodCallback<IS, OS, C>,
 ) => void;
 
-export interface MethodContext<IS extends z.Schema<any>, C> extends RequestContext {
-  controller: C;
+export interface MethodContext<IS extends z.Schema<any>> extends RequestContext {
   headers: ReturnType<typeof HeaderUtil.parse>;
   input: z.infer<IS>;
   url: string;
 }
 
-export type MethodCallContext<IS extends z.Schema<any>, C> = Omit<MethodContext<IS, C>, 'input'>;
+export type MethodCallContext<IS extends z.Schema<any>> = Omit<MethodContext<IS>, 'input'>;
 
 export type MethodCallback<IS extends z.Schema<any>, OS extends z.Schema<any>, C> = (
-  context: MethodContext<IS, C>,
+  this: C,
+  context: MethodContext<IS>,
 ) => Promise<z.infer<OS>>;
 
 class MethodConfig<IS extends z.Schema<any>, OS extends z.Schema<any>, C> {
@@ -67,7 +67,7 @@ class MethodConfig<IS extends z.Schema<any>, OS extends z.Schema<any>, C> {
     protected readonly callback: MethodCallback<IS, OS, C>,
   ) {}
 
-  public async call(callContext: MethodCallContext<IS, C>) {
+  public async call(controller: C, callContext: MethodCallContext<IS>) {
     const inputSchema = this.options.inputSchema;
     const outputSchema = this.options.outputSchema;
 
@@ -82,7 +82,7 @@ class MethodConfig<IS extends z.Schema<any>, OS extends z.Schema<any>, C> {
         });
       } else if (input instanceof Error) throw input;
 
-      const rawResponse = await this.callback({ ...callContext, input });
+      const rawResponse = await this.callback.call(controller, { ...callContext, input });
 
       const response = _.attempt(() => outputSchema.parse(rawResponse));
 
@@ -135,6 +135,7 @@ class MethodPool {
           ? config.options.clientGroups(defaultGroupName)
           : config?.options?.clientGroups;
 
+      if (!Array.isArray(clientGroups) && !StringUtil.isFalsyString(group) && defaultGroupName !== group) return;
       if (Array.isArray(clientGroups) && !clientGroups.includes(currentGroupName)) return;
 
       result[`/${name}`] = {
@@ -364,7 +365,7 @@ export class ControllerUtil {
   }
 
   public static create(createOptions?: ControllerUtilCreateOptions) {
-    function Controller<C>(options: HerbalControllerOptions<C>): ClassDecorator {
+    function Controller<C>(options?: HerbalControllerOptions<C>): ClassDecorator {
       return (target) => {
         const methodPool = new MethodPool();
         let finalPrefix: string = StringUtil.isFalsyString(options?.prefix)

@@ -42,6 +42,7 @@
     "@open-norantec/utilities": "latest",
     "commander": "^12.1.0",
     "fs-extra": "^11.3.4",
+    "json-schema-to-typescript": "^15.0.4",
     "lodash": "^4.17.21",
     "nest-winston": "^1.10.2",
     "nj-request-scope": "^1.0.10",
