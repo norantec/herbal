@@ -142,7 +142,7 @@ export class TypeScriptClient extends Client implements Client {
   }
 
   private async schemaToTypeScriptLiteral(schema: SchemaObject) {
-    const interfaceName = `Interface_${Math.random().toString(36).slice(2)}`;
+    const interfaceName = `Interface${Math.random().toString(36).slice(2)}`;
     return await compile(schema as Parameters<typeof compile>[0], interfaceName, {
       format: true,
       bannerComment: '',
@@ -158,7 +158,7 @@ export class TypeScriptClient extends Client implements Client {
         .split('\n')
         .map((line, index) => `${index === 0 ? '' : ' '}${line.trim()}`)
         .join('')
-        .slice(`export interface ${interfaceName} `.length);
+        .replace(/^export\s+interface\s+Interface[a-zA-Z0-9-_]+\s+\{/, '{');
     });
   }
 }
