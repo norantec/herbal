@@ -35,7 +35,9 @@ export class TypeScriptClient extends Client implements Client {
       const responseTypeLiteral = await this.schemaToTypeScriptLiteral(responseSchema as SchemaObject);
 
       methodTypeMapCodeLines.push(
-        [`'${pathname}': {`, ` request: ${requestTypeLiteral};`, ` response: ${responseTypeLiteral};`, ' };'].join(''),
+        [`  '${pathname}': {`, ` request: ${requestTypeLiteral};`, ` response: ${responseTypeLiteral};`, ' };'].join(
+          '',
+        ),
       );
     }
 
@@ -147,6 +149,7 @@ export class TypeScriptClient extends Client implements Client {
       format: true,
       bannerComment: '',
       additionalProperties: false,
+      unknownAny: false,
       style: {
         singleQuote: true,
         semi: true,
