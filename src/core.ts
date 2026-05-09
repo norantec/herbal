@@ -168,6 +168,12 @@ class MethodPool {
     this.methods.set(name!, new MethodConfig(name, options, callback));
   }
 
+  public transactionDisabled(name: string) {
+    if (StringUtil.isFalsyString(name)) return;
+    if (name!.includes('/')) throw new Error(`Method name cannot contain slashes: ${name}`);
+    return !!this.methods.get(name)?.options?.disableTransaction;
+  }
+
   public getCallFn(name: string) {
     const config = this.methods.get(name);
     if (!(config instanceof MethodConfig)) return null;
@@ -348,11 +354,16 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
       const rawHandlerName = context?.getHandler?.()?.name;
       const handlerPropertype = context?.getClass?.()?.prototype;
       const handlerName = StringUtil.isFalsyString(request.methodName) ? rawHandlerName : request.methodName!;
-      let authAdapters = getMethodPool(handlerPropertype)?.getAuthAdapters?.(handlerName);
+      const methodPool = getMethodPool(handlerPropertype);
+      let authAdapters = methodPool?.getAuthAdapters?.(handlerName);
 
       if (authAdapters === null) authAdapters = AuthAdapters.getAdapters(handlerPropertype, handlerName);
 
-      if (!(sequelizeInstance instanceof Error) && !NoTransaction.isDisabled(handlerPropertype, handlerName)) {
+      if (
+        !(sequelizeInstance instanceof Error) &&
+        !NoTransaction.isDisabled(handlerPropertype, rawHandlerName) &&
+        !methodPool?.transactionDisabled?.(handlerName)
+      ) {
         try {
           transaction = await sequelizeInstance?.transaction?.()?.catch(() => Promise.resolve(undefined));
           request.transaction = transaction;
