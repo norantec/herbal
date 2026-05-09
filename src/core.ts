@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { NotFoundException, Req } from '@nestjs/common';
+import { Logger, NotFoundException, Req } from '@nestjs/common';
 import { HeaderUtil } from '@open-norantec/utilities/dist/header-util.class';
 import { z, ZodError } from 'zod';
 import { HttpResponseBody } from './types/http-response-body.type';
@@ -36,6 +36,9 @@ import { createSchema } from 'zod-openapi';
 
 export * from '@nestjs/core';
 
+const HANDLE_REQUEST_SYMBOL = Symbol();
+const HANDLE_REQUEST_INSTANCE_SYMBOL = '$handleRequestInstance';
+
 export type MethodHandler<IS extends z.Schema<any>, OS extends z.Schema<any>> = (
   request: Request,
   input: unknown,
@@ -43,11 +46,9 @@ export type MethodHandler<IS extends z.Schema<any>, OS extends z.Schema<any>> = 
 ) => Promise<{ request: z.infer<IS>; response: z.infer<OS> }>;
 
 export class HerbalController {
-  private async $handleRequest(@Req() request: Request): Promise<HttpResponseBody<any>> {
+  private async [HANDLE_REQUEST_SYMBOL](request: Request): Promise<HttpResponseBody<any>> {
     const callFn = getMethodPool(this)?.getCallFn?.(request.methodName!);
-
     if (typeof callFn !== 'function') throw new NotFoundException(`Method ${request.methodName!} not found`);
-
     try {
       const result = {
         data: await callFn(this, {
@@ -346,7 +347,7 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
 
       const rawHandlerName = context?.getHandler?.()?.name;
       const handlerPropertype = context?.getClass?.()?.prototype;
-      const handlerName = StringUtil.isFalsyString(rawHandlerName) ? request.methodName : rawHandlerName;
+      const handlerName = StringUtil.isFalsyString(request.methodName) ? rawHandlerName : request.methodName!;
       let authAdapters = getMethodPool(handlerPropertype)?.getAuthAdapters?.(handlerName);
 
       if (authAdapters === null) authAdapters = AuthAdapters.getAdapters(handlerPropertype, handlerName);
@@ -420,6 +421,8 @@ export function getMethodPool(targetPrototype: object) {
 
 export class ControllerUtil {
   public static create(createOptions?: ControllerUtilCreateOptions) {
+    const logger = new Logger('Herbal');
+
     function Controller<C>(options?: HerbalControllerOptions<C>): ClassDecorator {
       return (target) => {
         const methodPool = new MethodPool();
@@ -429,6 +432,7 @@ export class ControllerUtil {
             : createOptions!.prefix!
           : options!.prefix!;
         const controllerName = _.camelCase(target.name.replace(/Controller$/g, ''));
+        const paths: string[] = [];
 
         if (!options?.ignoreControllerNamePostfix) {
           finalPrefix += `${finalPrefix?.endsWith?.('/') ? '' : '/'}${controllerName}`;
@@ -437,11 +441,7 @@ export class ControllerUtil {
         const register: MethodRegisterFn<C> = (name, options, callback) => {
           if (StringUtil.isFalsyString(name) || typeof callback !== 'function') return;
           methodPool.registerMethod(name, options, callback);
-          Post(name.startsWith('/') ? name : `/${name}`)(
-            target.prototype,
-            '$handleRequest',
-            Object.getOwnPropertyDescriptor(HerbalController.prototype, '$handleRequest')!,
-          );
+          paths.push(name.startsWith('/') ? name : `/${name}`);
         };
 
         if (!finalPrefix.startsWith('/')) finalPrefix = `/${finalPrefix}`;
@@ -451,6 +451,28 @@ export class ControllerUtil {
         Reflect.defineMetadata(METHOD_POOL, methodPool, target.prototype);
 
         if (typeof options?.methods === 'function') options.methods(register);
+
+        Object.defineProperty(target.prototype, HANDLE_REQUEST_INSTANCE_SYMBOL, {
+          enumerable: false,
+          writable: false,
+          value: function (request: Request) {
+            return this[HANDLE_REQUEST_SYMBOL].call(this, request);
+          },
+        });
+
+        Req()(target.prototype, HANDLE_REQUEST_INSTANCE_SYMBOL, 0);
+
+        if (paths.length > 0) {
+          Post(paths)(
+            target.prototype,
+            HANDLE_REQUEST_INSTANCE_SYMBOL,
+            Object.getOwnPropertyDescriptor(target.prototype, HANDLE_REQUEST_INSTANCE_SYMBOL)!,
+          );
+
+          paths.forEach((path) => {
+            logger.log(`Mapped method: /${controllerName}${path}`);
+          });
+        }
 
         NestController(finalPrefix)(target);
         UseInterceptors(ControllerInterceptor)(target);
