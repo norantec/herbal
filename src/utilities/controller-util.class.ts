@@ -240,6 +240,7 @@ class ControllerInterceptor implements NestInterceptor {
 }
 
 export interface HerbalControllerOptions<C> {
+  ignoreControllerNamePostfix?: boolean;
   prefix?: string;
   useHeadGuards?: Constructor<any>[];
   useTailGuards?: Constructor<any>[];
@@ -374,7 +375,11 @@ export class ControllerUtil {
             : createOptions!.prefix!
           : options!.prefix!;
         const controllerName = _.camelCase(target.name.replace(/Controller$/g, ''));
-        finalPrefix += `${finalPrefix?.endsWith?.('/') ? '' : '/'}${controllerName}`;
+
+        if (!options?.ignoreControllerNamePostfix) {
+          finalPrefix += `${finalPrefix?.endsWith?.('/') ? '' : '/'}${controllerName}`;
+        }
+
         const register: MethodRegisterFn<C> = (name, options, callback) => {
           if (StringUtil.isFalsyString(name) || typeof callback !== 'function') return;
           methodPool.registerMethod(name, options, callback);
