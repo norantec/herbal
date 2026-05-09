@@ -2,7 +2,6 @@ import 'reflect-metadata';
 import { Logger, NotFoundException, Req } from '@nestjs/common';
 import { HeaderUtil } from '@open-norantec/utilities/dist/header-util.class';
 import { z, ZodError } from 'zod';
-import { HttpResponseBody } from './types/http-response-body.type';
 import { Request, RequestContext } from './types/request.type';
 import { StringUtil } from '@open-norantec/utilities/dist/string-util.class';
 import { AttemptUtil } from '@open-norantec/utilities';
@@ -36,7 +35,6 @@ import { createSchema } from 'zod-openapi';
 
 export * from '@nestjs/core';
 
-const HANDLE_REQUEST_SYMBOL = Symbol();
 const HANDLE_REQUEST_INSTANCE_SYMBOL = '$handleRequestInstance';
 
 export type MethodHandler<IS extends z.Schema<any>, OS extends z.Schema<any>> = (
@@ -44,38 +42,6 @@ export type MethodHandler<IS extends z.Schema<any>, OS extends z.Schema<any>> = 
   input: unknown,
   headers: ReturnType<typeof HeaderUtil.parse>,
 ) => Promise<{ request: z.infer<IS>; response: z.infer<OS> }>;
-
-export class HerbalController {
-  private async [HANDLE_REQUEST_SYMBOL](request: Request): Promise<HttpResponseBody<any>> {
-    const callFn = getMethodPool(this)?.getCallFn?.(request.methodName!);
-    if (typeof callFn !== 'function') throw new NotFoundException(`Method ${request.methodName!} not found`);
-    try {
-      const result = {
-        data: await callFn(this, {
-          authenticateResult: request.authenticateResult,
-          headers: HeaderUtil.parse(request.headers ?? {}),
-          methodName: request.methodName,
-          rawBody: request.rawBody,
-          traceId: request.traceId,
-          transaction: request.transaction,
-          url: request.originalUrl,
-        }),
-        token: StringUtil.isFalsyString(request?.authenticateResult?.nextToken)
-          ? null
-          : request.authenticateResult!.nextToken!,
-      };
-      await request?.transaction?.commit?.();
-      return result;
-    } catch (error) {
-      await AttemptUtil.execPromise(
-        (async () => {
-          await request?.transaction?.rollback?.();
-        })(),
-      );
-      throw error;
-    }
-  }
-}
 
 /* eslint-disable @typescript-eslint/no-unsafe-function-type */
 
@@ -463,11 +429,41 @@ export class ControllerUtil {
 
         if (typeof options?.methods === 'function') options.methods(register);
 
+        async function handleRequest(request: Request) {
+          const callFn = getMethodPool(this)?.getCallFn?.(request.methodName!);
+          if (typeof callFn !== 'function') throw new NotFoundException(`Method ${request.methodName!} not found`);
+          try {
+            const result = {
+              data: await callFn(this, {
+                authenticateResult: request.authenticateResult,
+                headers: HeaderUtil.parse(request.headers ?? {}),
+                methodName: request.methodName,
+                rawBody: request.rawBody,
+                traceId: request.traceId,
+                transaction: request.transaction,
+                url: request.originalUrl,
+              }),
+              token: StringUtil.isFalsyString(request?.authenticateResult?.nextToken)
+                ? null
+                : request.authenticateResult!.nextToken!,
+            };
+            await request?.transaction?.commit?.();
+            return result;
+          } catch (error) {
+            await AttemptUtil.execPromise(
+              (async () => {
+                await request?.transaction?.rollback?.();
+              })(),
+            );
+            throw error;
+          }
+        }
+
         Object.defineProperty(target.prototype, HANDLE_REQUEST_INSTANCE_SYMBOL, {
           enumerable: false,
           writable: false,
           value: function (request: Request) {
-            return this[HANDLE_REQUEST_SYMBOL].call(this, request);
+            return handleRequest.call(this, request);
           },
         });
 
