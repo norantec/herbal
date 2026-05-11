@@ -1,10 +1,9 @@
 import 'reflect-metadata';
 import { Logger, NotFoundException, Req } from '@nestjs/common';
 import { HeaderUtil } from '@open-norantec/utilities/dist/header-util.class';
-import { z, ZodError } from 'zod';
 import { Request, RequestContext } from './types/request.type';
 import { StringUtil } from '@open-norantec/utilities/dist/string-util.class';
-import { AttemptUtil } from '@open-norantec/utilities';
+import { AttemptUtil, z, ZodError } from '@open-norantec/utilities';
 import 'reflect-metadata';
 import {
   Controller as NestController,
@@ -30,14 +29,13 @@ import { Sequelize } from 'sequelize-typescript';
 import { Transaction } from 'sequelize';
 import { NoTransaction } from './decorators';
 import { AuthAdapter } from './abstracts/auth-adapter.abstract.class';
-import { PathsObject, SchemaObject } from 'zod-openapi/dist/openapi3-ts/dist/model/openapi31';
-import { createSchema } from 'zod-openapi';
+import { PathsObject } from 'openapi3-ts/oas31';
 
 export * from '@nestjs/core';
 
 const HANDLE_REQUEST_INSTANCE_SYMBOL = '$handleRequestInstance';
 
-export type MethodHandler<IS extends z.Schema<any>, OS extends z.Schema<any>> = (
+export type MethodHandler<IS extends z.ZodType<any>, OS extends z.ZodType<any>> = (
   request: Request,
   input: unknown,
   headers: ReturnType<typeof HeaderUtil.parse>,
@@ -54,7 +52,7 @@ const METHOD_POOL = Symbol();
 type ClientGroups = Array<string> | null | undefined;
 type ClienttGroupsFactory = (defaultGroupName: string) => ClientGroups;
 
-export interface MethodRegisterOptions<IS extends z.Schema<any>, OS extends z.Schema<any>> {
+export interface MethodRegisterOptions<IS extends z.ZodType<any>, OS extends z.ZodType<any>> {
   inputSchema: IS;
   outputSchema: OS;
   authAdapters?: Constructor<AuthAdapter>[];
@@ -62,26 +60,26 @@ export interface MethodRegisterOptions<IS extends z.Schema<any>, OS extends z.Sc
   disableTransaction?: boolean;
 }
 
-export type MethodRegisterFn<C> = <IS extends z.Schema<any>, OS extends z.Schema<any>>(
+export type MethodRegisterFn<C> = <IS extends z.ZodType<any>, OS extends z.ZodType<any>>(
   name: string,
   options: MethodRegisterOptions<IS, OS>,
   callback: MethodCallback<IS, OS, C>,
 ) => void;
 
-export interface MethodContext<IS extends z.Schema<any>> extends RequestContext {
+export interface MethodContext<IS extends z.ZodType<any>> extends RequestContext {
   headers: ReturnType<typeof HeaderUtil.parse>;
   input: z.infer<IS>;
   url: string;
 }
 
-export type MethodCallContext<IS extends z.Schema<any>> = Omit<MethodContext<IS>, 'input'>;
+export type MethodCallContext<IS extends z.ZodType<any>> = Omit<MethodContext<IS>, 'input'>;
 
-export type MethodCallback<IS extends z.Schema<any>, OS extends z.Schema<any>, C> = (
+export type MethodCallback<IS extends z.ZodType<any>, OS extends z.ZodType<any>, C> = (
   this: C,
   context: MethodContext<IS>,
 ) => Promise<z.infer<OS>>;
 
-class MethodConfig<IS extends z.Schema<any>, OS extends z.Schema<any>, C> {
+class MethodConfig<IS extends z.ZodType<any>, OS extends z.ZodType<any>, C> {
   public constructor(
     public readonly name: string,
     public readonly options: MethodRegisterOptions<IS, OS>,
@@ -124,7 +122,7 @@ class MethodConfig<IS extends z.Schema<any>, OS extends z.Schema<any>, C> {
 class MethodPool {
   protected readonly methods = new Map<string, MethodConfig<any, any, any>>();
 
-  public registerMethod<IS extends z.Schema<any>, OS extends z.Schema<any>, C>(
+  public registerMethod<IS extends z.ZodType<any>, OS extends z.ZodType<any>, C>(
     name: string,
     options: MethodRegisterOptions<IS, OS>,
     callback: MethodCallback<IS, OS, C>,
@@ -172,7 +170,7 @@ class MethodPool {
             required: true,
             content: {
               'application/json': {
-                schema: createSchema(config.options.inputSchema).schema as SchemaObject,
+                schema: config.options.inputSchema,
               },
             },
           },
@@ -180,12 +178,12 @@ class MethodPool {
             '200': {
               description: 'Response for method ' + name,
               content: {
-                'application/json': createSchema(
-                  z.object({
-                    data: config.options.outputSchema,
+                'application/json': z
+                  .object({
+                    data: (config.options.outputSchema as z.ZodType<any>).toJSONSchema(),
                     token: z.string().nullable(),
-                  }),
-                ),
+                  })
+                  .toJSONSchema(),
               },
             },
           },

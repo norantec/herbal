@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { SchemaObject, RequestBodyObject, ResponseObject } from 'zod-openapi/dist/openapi3-ts/dist/model/openapi31';
+import { SchemaObject, RequestBodyObject, ResponseObject } from 'openapi3-ts/oas31';
 import { Client, CreateClientOptions } from '../abstracts/client.abstract.class';
 import { compile } from 'json-schema-to-typescript';
 

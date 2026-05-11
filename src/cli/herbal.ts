@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import { createCommand } from '@open-norantec/forge';
-import { Schema } from '@open-norantec/utilities/dist/schema-util.class';
+import { EnumTypes } from '@open-norantec/utilities';
 import * as _ from 'lodash';
 import * as fs from 'fs-extra';
 import * as path from 'node:path';
@@ -11,7 +11,7 @@ import * as requireFromString from 'require-from-string';
 
 const command = new Command('herbal');
 
-const log = (level: Schema.LogLevel, ...messages: string[]) => {
+const log = (level: EnumTypes.LogLevel, ...messages: string[]) => {
   console.log(`[${new Date().toISOString()}] -${level}- ${messages?.join?.(' ') ?? ''}`);
   switch (level) {
     case 'error':

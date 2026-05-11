@@ -3,7 +3,7 @@ import { Constructor } from 'type-fest';
 import { NestUtil } from '../utilities/nest-util.class';
 import { StringUtil } from '@open-norantec/utilities/dist/string-util.class';
 import { getMethodPool, getControllerName, isHerbalController } from '../core';
-import { OpenAPIObject } from 'zod-openapi/dist/openapi3-ts/dist/model/openapi31';
+import { OpenAPIObject } from 'openapi3-ts/oas31';
 
 export interface CreateClientOptions {
   Module: Constructor<any>;
