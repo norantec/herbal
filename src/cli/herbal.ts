@@ -209,7 +209,7 @@ command
                 (generatedCode) => generatedCode ?? '',
               );
             } catch (error) {
-              log('error', `Failed to generate client code:`, error instanceof Error ? error.message : String(error));
+              log('error', `Failed to generate client code:`, error?.message);
               return '';
             }
           },

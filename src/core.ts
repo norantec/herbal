@@ -29,7 +29,7 @@ import { Sequelize } from 'sequelize-typescript';
 import { Transaction } from 'sequelize';
 import { NoTransaction } from './decorators';
 import { AuthAdapter } from './abstracts/auth-adapter.abstract.class';
-import { PathsObject } from 'openapi3-ts/oas31';
+import { PathsObject, SchemaObject } from 'openapi3-ts/oas31';
 
 export * from '@nestjs/core';
 
@@ -170,7 +170,7 @@ class MethodPool {
             required: true,
             content: {
               'application/json': {
-                schema: config.options.inputSchema,
+                schema: (config.options.inputSchema as z.ZodType<any>).toJSONSchema() as SchemaObject,
               },
             },
           },
@@ -180,7 +180,7 @@ class MethodPool {
               content: {
                 'application/json': z
                   .object({
-                    data: (config.options.outputSchema as z.ZodType<any>).toJSONSchema(),
+                    data: config.options.outputSchema as z.ZodType<any>,
                     token: z.string().nullable(),
                   })
                   .toJSONSchema(),
