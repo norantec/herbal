@@ -178,12 +178,14 @@ class MethodPool {
             '200': {
               description: 'Response for method ' + name,
               content: {
-                'application/json': z
-                  .object({
-                    data: config.options.outputSchema as z.ZodType<any>,
-                    token: z.string().nullable(),
-                  })
-                  .toJSONSchema(),
+                'application/json': {
+                  schema: z
+                    .object({
+                      data: config.options.outputSchema as z.ZodType<any>,
+                      token: z.string().nullable(),
+                    })
+                    .toJSONSchema(),
+                },
               },
             },
           },

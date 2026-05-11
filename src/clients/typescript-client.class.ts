@@ -144,7 +144,10 @@ export class TypeScriptClient extends Client implements Client {
   }
 
   private async schemaToTypeScriptLiteral(schema: SchemaObject) {
+    if (!schema) return 'unknown';
+
     const interfaceName = `Interface${Math.random().toString(36).slice(2)}`;
+
     return await compile(schema as Parameters<typeof compile>[0], interfaceName, {
       format: true,
       bannerComment: '',
@@ -155,6 +158,7 @@ export class TypeScriptClient extends Client implements Client {
         semi: true,
         trailingComma: 'none',
       },
+      cwd: process.cwd(),
     }).then((code) => {
       return code
         .trim()
