@@ -325,11 +325,10 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
 
       if (authAdapters === null) authAdapters = AuthAdapters.getAdapters(handlerPropertype, handlerName);
 
-      if (
-        !(sequelizeInstance instanceof Error) &&
-        !NoTransaction.isDisabled(handlerPropertype, rawHandlerName) &&
-        !methodPool?.transactionDisabled?.(handlerName)
-      ) {
+      const shouldHaveTransaction =
+        !NoTransaction.isDisabled(handlerPropertype, rawHandlerName) && !methodPool?.transactionDisabled?.(handlerName);
+
+      if (!(sequelizeInstance instanceof Error) && shouldHaveTransaction) {
         try {
           transaction = await sequelizeInstance?.transaction?.()?.catch(() => Promise.resolve(undefined));
           request.transaction = transaction;
@@ -341,7 +340,7 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
             );
           }
         }
-      } else if (NoTransaction.isDisabled(handlerPropertype, handlerName)) {
+      } else if (!shouldHaveTransaction) {
         this.getLogger().log(
           `[trace:${request?.traceId}:transaction] Transaction is disabled for this route: ${handlerName}`,
         );
