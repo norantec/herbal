@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import * as _ from 'lodash';
 import { Constructor } from 'type-fest';
 import { AuthAdapter } from '../abstracts/auth-adapter.abstract.class';
+import { StringUtil } from '@open-norantec/utilities';
 
 const AUTH_ADAPTERS = Symbol();
 
@@ -11,8 +12,9 @@ export function AuthAdapters(adapters?: Constructor<AuthAdapter>[]): PropertyDec
   };
 }
 
-AuthAdapters.getAdapters = (target: object, propertyKey: string): Constructor<AuthAdapter>[] => {
-  const result = _.attempt(() => Reflect.getMetadata(AUTH_ADAPTERS, target, propertyKey));
+AuthAdapters.getAdapters = (target: object, propertyKey?: string): Constructor<AuthAdapter>[] => {
+  if (StringUtil.isFalsyString(propertyKey)) return [];
+  const result = _.attempt(() => Reflect.getMetadata(AUTH_ADAPTERS, target, propertyKey!));
   if (Array.isArray(result)) return result;
   return [];
 };

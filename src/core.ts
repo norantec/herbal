@@ -46,7 +46,6 @@ export type MethodHandler<IS extends z.ZodType<any>, OS extends z.ZodType<any>> 
 /**
  * METHOD ZONE
  */
-
 const METHOD_POOL = Symbol();
 
 type ClientGroups = Array<string> | null | undefined;
@@ -132,10 +131,10 @@ class MethodPool {
     this.methods.set(name!, new MethodConfig(name, options, callback));
   }
 
-  public transactionDisabled(name: string) {
-    if (StringUtil.isFalsyString(name)) return;
+  public transactionDisabled(name?: string) {
+    if (StringUtil.isFalsyString(name)) return false;
     if (name!.includes('/')) throw new Error(`Method name cannot contain slashes: ${name}`);
-    return !!this.methods.get(name)?.options?.disableTransaction;
+    return !!this.methods.get(name!)?.options?.disableTransaction;
   }
 
   public getCallFn(name: string) {
@@ -144,8 +143,9 @@ class MethodPool {
     return config.call.bind(config) as typeof config.call;
   }
 
-  public getAuthAdapters(name: string) {
-    const config = this.methods.get(name);
+  public getAuthAdapters(name?: string) {
+    if (StringUtil.isFalsyString(name)) return null;
+    const config = this.methods.get(name!);
     if (!(config instanceof MethodConfig)) return null;
     return config.options.authAdapters;
   }
@@ -280,14 +280,113 @@ export interface ControllerUtilCreateOptions {
   getTraceId?: (request: ExpressRequest) => string;
 }
 
+export async function parseRequest({
+  request,
+  traceId: inputTraceId,
+  sequelize: sequelizeInstance,
+  moduleRef,
+  handlerName,
+  handlerPrototype,
+  onLog,
+}: {
+  handlerPrototype: object;
+  moduleRef: ModuleRef;
+  request: Request;
+  handlerName?: string;
+  sequelize?: Sequelize;
+  traceId?: string;
+  onLog?: (methodName: string, message: string) => void;
+}): Promise<void> {
+  let transaction: Transaction | undefined = undefined;
+
+  request.traceId = StringUtil.isFalsyString(inputTraceId) ? UUIDUtil.generateV4() : inputTraceId!;
+  request.methodName = request.url.split('/').pop()!;
+
+  if (typeof request.rawBody === 'undefined') {
+    const chunks: Uint8Array[] = [];
+
+    try {
+      for await (const chunk of request) chunks.push(chunk);
+    } catch {}
+
+    const parsedBody = _.attempt(() => Buffer.concat(chunks).toString('utf8'));
+
+    if (!(parsedBody instanceof Error)) {
+      request.rawBody = parsedBody;
+    } else {
+      request.rawBody = null;
+    }
+  }
+
+  _.attempt(() => onLog?.('log', `[trace:${request?.traceId}:request:body] ${request.rawBody}`));
+
+  const methodPool = getMethodPool(handlerPrototype);
+  let authAdapters = methodPool?.getAuthAdapters?.(request.methodName);
+
+  if (authAdapters === null) authAdapters = AuthAdapters.getAdapters(handlerPrototype, handlerName);
+
+  const shouldHaveTransaction =
+    !NoTransaction.isDisabled(handlerPrototype, handlerName) && !methodPool?.transactionDisabled?.(request.methodName);
+
+  if (sequelizeInstance instanceof Sequelize && shouldHaveTransaction) {
+    try {
+      transaction = await sequelizeInstance?.transaction?.()?.catch(() => Promise.resolve(undefined));
+      request.transaction = transaction;
+      onLog?.('log', `[trace:${request?.traceId}:transaction] Started transaction for route: ${request.url}`);
+    } catch (error) {
+      if (error instanceof Error) {
+        onLog?.(
+          'error',
+          `[trace:${request?.traceId}:transaction] Failed to start transaction: ${error?.message}\n${error?.stack}`,
+        );
+      }
+    }
+  } else if (!shouldHaveTransaction) {
+    onLog?.('log', `[trace:${request?.traceId}:transaction] Transaction is disabled for this route: ${request.url}`);
+  } else {
+    throw new Error('Sequelize instance not found, cannot start transaction');
+  }
+
+  try {
+    if (Array.isArray(authAdapters) && authAdapters.length > 0 && typeof request.authenticateResult === 'undefined') {
+      const authSucceeded = await (async () => {
+        for (const AuthAdapterClass of authAdapters) {
+          const adapter = new AuthAdapterClass(request, moduleRef);
+          if (!adapter.match()) continue;
+          const authenticateResult = await adapter.authenticate(transaction);
+          if (!authenticateResult) break;
+          request.authenticateResult = {
+            AuthenticatorClass: AuthAdapterClass,
+            ...authenticateResult,
+          };
+          return true;
+        }
+        return false;
+      })();
+      if (!authSucceeded) throw new UnauthorizedException();
+    }
+  } catch (error) {
+    try {
+      if (error instanceof Error) {
+        onLog?.(
+          'error',
+          `[trace:${request?.traceId}:error] Got error when handling route: ${error?.message} ${error?.stack}`,
+        );
+      }
+      await transaction?.rollback?.();
+    } catch {}
+    throw error;
+  }
+}
+
 function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
   @Injectable()
   class HerbalGuardMixin implements CanActivate {
     public constructor(protected readonly ref: ModuleRef) {}
 
     public async canActivate(context: ExecutionContext): Promise<boolean> {
+      const logger = this.getLogger();
       const sequelizeInstance = _.attempt(() => this.ref.get(Sequelize, { strict: false }));
-      let transaction: Transaction | undefined = undefined;
       const request: Request = context.switchToHttp().getRequest();
       const response: Response = context.switchToHttp().getResponse();
       let traceId =
@@ -297,79 +396,21 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
 
       if (traceId instanceof Error || StringUtil.isFalsyString(traceId)) traceId = UUIDUtil.generateV4();
 
-      request.traceId = traceId;
-      request.methodName = request.url.split('/').pop()!;
+      await parseRequest({
+        request,
+        moduleRef: this.ref,
+        sequelize: sequelizeInstance instanceof Error ? undefined : sequelizeInstance,
+        handlerPrototype: context?.getClass?.()?.prototype ?? {},
+        handlerName: context?.getHandler?.()?.name,
+        traceId,
+        onLog: (method, message) => {
+          try {
+            logger[method]?.(message);
+          } catch {}
+        },
+      });
+
       response.setHeader(HEADERS.TRACE_ID, traceId);
-
-      const chunks: Uint8Array[] = [];
-
-      try {
-        for await (const chunk of request) chunks.push(chunk);
-      } catch {}
-
-      const parsedBody = _.attempt(() => Buffer.concat(chunks).toString('utf8'));
-
-      if (!(parsedBody instanceof Error)) {
-        request.rawBody = parsedBody;
-      } else {
-        request.rawBody = null;
-      }
-
-      _.attempt(() => this.getLogger().log(`[trace:${request?.traceId}:request:body] ${request.rawBody}`));
-
-      const rawHandlerName = context?.getHandler?.()?.name;
-      const handlerPropertype = context?.getClass?.()?.prototype;
-      const handlerName = StringUtil.isFalsyString(request.methodName) ? rawHandlerName : request.methodName!;
-      const methodPool = getMethodPool(handlerPropertype);
-      let authAdapters = methodPool?.getAuthAdapters?.(handlerName);
-
-      if (authAdapters === null) authAdapters = AuthAdapters.getAdapters(handlerPropertype, handlerName);
-
-      const shouldHaveTransaction =
-        !NoTransaction.isDisabled(handlerPropertype, rawHandlerName) && !methodPool?.transactionDisabled?.(handlerName);
-
-      if (!(sequelizeInstance instanceof Error) && shouldHaveTransaction) {
-        try {
-          transaction = await sequelizeInstance?.transaction?.()?.catch(() => Promise.resolve(undefined));
-          request.transaction = transaction;
-          this.getLogger().log(`[trace:${request?.traceId}:transaction] Started transaction for route: ${handlerName}`);
-        } catch (error) {
-          if (error instanceof Error) {
-            this.getLogger().error(
-              `[trace:${request?.traceId}:transaction] Failed to start transaction: ${error?.message}\n${error?.stack}`,
-            );
-          }
-        }
-      } else if (!shouldHaveTransaction) {
-        this.getLogger().log(
-          `[trace:${request?.traceId}:transaction] Transaction is disabled for this route: ${handlerName}`,
-        );
-      }
-
-      try {
-        if (Array.isArray(authAdapters) && authAdapters.length > 0) {
-          for (const AuthAdapterClass of authAdapters) {
-            const adapter = new AuthAdapterClass(request, this.ref);
-            if (!adapter.match()) continue;
-            const authenticateResult = await adapter.authenticate(transaction);
-            if (!authenticateResult) break;
-            request.authenticateResult = {
-              AuthenticatorClass: AuthAdapterClass,
-              ...authenticateResult,
-            };
-            return true;
-          }
-          throw new UnauthorizedException();
-        }
-      } catch (error) {
-        try {
-          if (error instanceof Error) {
-            this.getLogger().error(`Got error when handling route: ${error?.message} ${error?.stack}`);
-          }
-          await transaction?.rollback?.();
-        } catch {}
-        throw error;
-      }
 
       return true;
     }
@@ -461,7 +502,7 @@ export class ControllerUtil {
         Object.defineProperty(target.prototype, HANDLE_REQUEST_INSTANCE_SYMBOL, {
           enumerable: false,
           writable: false,
-          value: function (request: Request) {
+          value: function $herbalInternal(request: Request) {
             return handleRequest.call(this, request);
           },
         });
@@ -495,5 +536,15 @@ export class ControllerUtil {
     Controller.getControllerName = getControllerName;
 
     return Controller;
+  }
+}
+
+export function getRequestHandler(controller: object) {
+  try {
+    const requestHandler = Object.getOwnPropertyDescriptor(controller, HANDLE_REQUEST_INSTANCE_SYMBOL)?.value;
+    if (typeof requestHandler !== 'function') return null;
+    return requestHandler as (request: Request) => Promise<any>;
+  } catch {
+    return null;
   }
 }
