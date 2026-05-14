@@ -202,6 +202,8 @@ class MethodPool {
 
 const IS_HERBAL_CONTROLLER = Symbol();
 const CONTROLLER_NAME = Symbol();
+const AFTER_PARSING_REQUEST_HANDLERS = Symbol();
+const BEFORE_PARSING_REQUEST_HANDLERS = Symbol();
 
 export function isHerbalController(target: Function) {
   return _.attempt(() => Reflect.getMetadata(IS_HERBAL_CONTROLLER, target.prototype)) === true;
@@ -269,15 +271,16 @@ class ControllerInterceptor implements NestInterceptor {
 export interface HerbalControllerOptions<C> {
   ignoreControllerNamePostfix?: boolean;
   prefix?: string;
-  useHeadGuards?: Constructor<any>[];
-  useTailGuards?: Constructor<any>[];
   methods?: (register: MethodRegisterFn<C>) => void;
+  onAfterParsingRequest?: (request: Request, moduleRef: ModuleRef) => void | Promise<void>;
+  onBeforeParsingRequest?: (request: Request, moduleRef: ModuleRef) => void | Promise<void>;
 }
 
 export interface ControllerUtilCreateOptions {
   prefix?: string;
-  useGuards?: Constructor<any>[];
   getTraceId?: (request: ExpressRequest) => string;
+  onAfterParsingRequest?: HerbalControllerOptions<any>['onAfterParsingRequest'];
+  onBeforeParsingRequest?: HerbalControllerOptions<any>['onBeforeParsingRequest'];
 }
 
 export async function parseRequest({
@@ -298,6 +301,10 @@ export async function parseRequest({
   onLog?: (methodName: string, message: string) => void;
 }): Promise<void> {
   let transaction: Transaction | undefined = undefined;
+  const beforeParsingRequestHandlers: Array<NonNullable<HerbalControllerOptions<any>['onBeforeParsingRequest']>> =
+    Reflect.getMetadata(BEFORE_PARSING_REQUEST_HANDLERS, handlerPrototype);
+  const afterParsingRequestHandlers: Array<NonNullable<HerbalControllerOptions<any>['onAfterParsingRequest']>> =
+    Reflect.getMetadata(AFTER_PARSING_REQUEST_HANDLERS, handlerPrototype);
 
   request.traceId = StringUtil.isFalsyString(inputTraceId) ? UUIDUtil.generateV4() : inputTraceId!;
   request.methodName = request.url.split('/').pop()!;
@@ -319,6 +326,12 @@ export async function parseRequest({
   }
 
   _.attempt(() => onLog?.('log', `[trace:${request?.traceId}:request:body] ${request.rawBody}`));
+
+  await Promise.all(
+    (Array.isArray(beforeParsingRequestHandlers) ? beforeParsingRequestHandlers : []).map((handler) =>
+      handler(request, moduleRef),
+    ),
+  );
 
   const methodPool = getMethodPool(handlerPrototype);
   let authAdapters = methodPool?.getAuthAdapters?.(request.methodName);
@@ -376,6 +389,12 @@ export async function parseRequest({
       await transaction?.rollback?.();
     } catch {}
     throw error;
+  } finally {
+    await Promise.all(
+      (Array.isArray(afterParsingRequestHandlers) ? afterParsingRequestHandlers : []).map((handler) =>
+        handler(request, moduleRef),
+      ),
+    );
   }
 }
 
@@ -521,14 +540,24 @@ export class ControllerUtil {
           });
         }
 
+        const beforeParsingRequestHandlers: HerbalControllerOptions<any>['onBeforeParsingRequest'][] = [];
+        const afterParsingRequestHandlers: HerbalControllerOptions<any>['onAfterParsingRequest'][] = [];
+
+        if (typeof createOptions?.onBeforeParsingRequest === 'function')
+          beforeParsingRequestHandlers.push(createOptions.onBeforeParsingRequest);
+        if (typeof options?.onBeforeParsingRequest === 'function')
+          beforeParsingRequestHandlers.push(options.onBeforeParsingRequest);
+        if (typeof options?.onAfterParsingRequest === 'function')
+          afterParsingRequestHandlers.push(options.onAfterParsingRequest);
+        if (typeof createOptions?.onAfterParsingRequest === 'function')
+          afterParsingRequestHandlers.push(createOptions.onAfterParsingRequest);
+
+        Reflect.defineMetadata(BEFORE_PARSING_REQUEST_HANDLERS, beforeParsingRequestHandlers, target.prototype);
+        Reflect.defineMetadata(AFTER_PARSING_REQUEST_HANDLERS, afterParsingRequestHandlers, target.prototype);
+
         NestController(finalPrefix)(target);
         UseInterceptors(ControllerInterceptor)(target);
-        UseGuards(
-          HerbalGuard(_.pick(createOptions, ['getTraceId'])),
-          ...(Array.isArray(options?.useHeadGuards) ? options!.useHeadGuards : []),
-          ...(Array.isArray(createOptions?.useGuards) ? createOptions!.useGuards : []),
-          ...(Array.isArray(options?.useTailGuards) ? options!.useTailGuards : []),
-        )(target);
+        UseGuards(HerbalGuard(_.pick(createOptions, ['getTraceId'])))(target);
       };
     }
 
