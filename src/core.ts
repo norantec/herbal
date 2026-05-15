@@ -30,6 +30,7 @@ import { Transaction } from 'sequelize';
 import { NoTransaction } from './decorators';
 import { AuthAdapter } from './abstracts/auth-adapter.abstract.class';
 import { PathsObject, SchemaObject } from 'openapi3-ts/oas31';
+import { GetModuleFn } from './types';
 
 export * from '@nestjs/core';
 
@@ -272,8 +273,8 @@ export interface HerbalControllerOptions<C> {
   ignoreControllerNamePostfix?: boolean;
   prefix?: string;
   methods?: (register: MethodRegisterFn<C>) => void;
-  onAfterParsingRequest?: (request: Request, moduleRef: ModuleRef) => void | Promise<void>;
-  onBeforeParsingRequest?: (request: Request, moduleRef: ModuleRef) => void | Promise<void>;
+  onAfterParsingRequest?: (request: Request, getModule: GetModuleFn) => void | Promise<void>;
+  onBeforeParsingRequest?: (request: Request, getModule: GetModuleFn) => void | Promise<void>;
 }
 
 export interface ControllerUtilCreateOptions {
@@ -287,17 +288,17 @@ export async function parseRequest({
   request,
   traceId: inputTraceId,
   sequelize: sequelizeInstance,
-  moduleRef,
   handlerName,
   handlerPrototype,
   onLog,
+  getModule,
 }: {
   handlerPrototype: object;
-  moduleRef: ModuleRef;
   request: Request;
   handlerName?: string;
   sequelize?: Sequelize;
   traceId?: string;
+  getModule: GetModuleFn;
   onLog?: (methodName: string, message: string) => void;
 }): Promise<void> {
   let transaction: Transaction | undefined = undefined;
@@ -329,7 +330,7 @@ export async function parseRequest({
 
   await Promise.all(
     (Array.isArray(beforeParsingRequestHandlers) ? beforeParsingRequestHandlers : []).map((handler) =>
-      handler(request, moduleRef),
+      handler(request, getModule),
     ),
   );
 
@@ -364,7 +365,7 @@ export async function parseRequest({
     if (Array.isArray(authAdapters) && authAdapters.length > 0 && typeof request.authenticateResult === 'undefined') {
       const authSucceeded = await (async () => {
         for (const AuthAdapterClass of authAdapters) {
-          const adapter = new AuthAdapterClass(request, moduleRef);
+          const adapter = new AuthAdapterClass(request, getModule);
           if (!adapter.match()) continue;
           const authenticateResult = await adapter.authenticate(transaction);
           if (!authenticateResult) break;
@@ -392,7 +393,7 @@ export async function parseRequest({
   } finally {
     await Promise.all(
       (Array.isArray(afterParsingRequestHandlers) ? afterParsingRequestHandlers : []).map((handler) =>
-        handler(request, moduleRef),
+        handler(request, getModule),
       ),
     );
   }
@@ -417,11 +418,11 @@ function HerbalGuard(options: Pick<ControllerUtilCreateOptions, 'getTraceId'>) {
 
       await parseRequest({
         request,
-        moduleRef: this.ref,
         sequelize: sequelizeInstance instanceof Error ? undefined : sequelizeInstance,
         handlerPrototype: context?.getClass?.()?.prototype ?? {},
         handlerName: context?.getHandler?.()?.name,
         traceId,
+        getModule: this.ref.get.bind(this.ref) as GetModuleFn,
         onLog: (method, message) => {
           try {
             logger[method]?.(message);
