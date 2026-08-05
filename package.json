@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "rimraf dist && tsc -b",
+    "build": "rimraf dist && tsc",
     "postinstall": "node ./bin/herbal-patch.js",
     "upgrade": "npm i @open-norantec/forge@latest -S && npm i @open-norantec/utilities@latest -D"
   },
@@ -33,15 +33,14 @@
   "homepage": "https://github.com/norantec/herbal#readme",
   "peerDependencies": {
     "@open-norantec/utilities": ">= 2.0.0",
-    "express": ">=4.0.0 <5.0.0",
-    "typescript": ">=5.1.0 <5.2.0"
+    "express": ">=4.0.0 <5.0.0"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
     "@nestjs/core": "^10.4.19",
     "@nestjs/platform-express": "^10.4.22",
     "@nestjs/sequelize": "^10.0.1",
-    "@open-norantec/forge": "^3.0.0-alpha.4",
+    "@open-norantec/forge": "^3.0.0-alpha.6",
     "commander": "^12.1.0",
     "fs-extra": "^11.3.4",
     "json-schema-to-typescript": "^15.0.4",
@@ -54,11 +53,10 @@
     "sequelize": "6.37.7",
     "sequelize-typescript": "^2.1.5",
     "type-fest": "^4.41.0",
-    "typescript": ">=5.1.0 <5.2.0",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
-    "@open-norantec/utilities": "^2.0.4",
+    "@open-norantec/utilities": "^2.1.3",
     "@types/express": "^5.0.3",
     "@types/fs-extra": "^11.0.4",
     "@types/lodash": "^4.17.16",
@@ -68,6 +66,7 @@
     "express": "^4.21.2",
     "openapi3-ts": "^4.5.0",
     "rimraf": "^6.0.1",
-    "ts-node": "^10.0.0"
+    "ts-node": "^10.0.0",
+    "typescript": "^6.0.3"
   }
 }

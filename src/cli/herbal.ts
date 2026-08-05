@@ -208,7 +208,7 @@ command
               return await Promise.resolve(generateCodeMethod({ group: options?.group })).then(
                 (generatedCode) => generatedCode ?? '',
               );
-            } catch (error) {
+            } catch (error: any) {
               log('error', `Failed to generate client code:`, error?.message);
               return '';
             }

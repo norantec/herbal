@@ -113,7 +113,7 @@ class MethodConfig<IS extends z.ZodType<any>, OS extends z.ZodType<any>, C> {
       } else if (response instanceof Error) throw response;
 
       return response as z.infer<OS>;
-    } catch (error) {
+    } catch (error: any) {
       throw error;
     }
   }
@@ -347,7 +347,7 @@ export async function parseRequest({
       transaction = await sequelizeInstance?.transaction?.()?.catch(() => Promise.resolve(undefined));
       request.transaction = transaction;
       onLog?.('log', `[trace:${request?.traceId}:transaction] Started transaction for route: ${request.url}`);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof Error) {
         onLog?.(
           'error',
@@ -379,7 +379,7 @@ export async function parseRequest({
       })();
       if (!authSucceeded) throw new UnauthorizedException();
     }
-  } catch (error) {
+  } catch (error: any) {
     try {
       if (error instanceof Error) {
         onLog?.(
@@ -490,11 +490,14 @@ export class ControllerUtil {
         if (typeof options?.methods === 'function') options.methods(register);
 
         async function handleRequest(request: Request) {
-          const callFn = getMethodPool(this)?.getCallFn?.(request.methodName!);
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          const _this: object = this as unknown as object;
+          const callFn = getMethodPool(_this)?.getCallFn?.(request.methodName!);
           if (typeof callFn !== 'function') throw new NotFoundException(`Method ${request.methodName!} not found`);
           try {
             const result = {
-              data: await callFn(this, {
+              data: await callFn(_this, {
                 authenticateResult: request.authenticateResult,
                 headers: HeaderUtil.parse(request.headers ?? {}),
                 methodName: request.methodName,
@@ -509,7 +512,7 @@ export class ControllerUtil {
             };
             await request?.transaction?.commit?.();
             return result;
-          } catch (error) {
+          } catch (error: any) {
             await AttemptUtil.execPromise(
               (async () => {
                 await request?.transaction?.rollback?.();
