@@ -7,7 +7,7 @@ import * as _ from 'lodash';
 import * as fs from 'fs-extra';
 import * as path from 'node:path';
 import { Forge } from '@open-norantec/forge';
-import * as requireFromString from 'require-from-string';
+import requireFromString = require('require-from-string');
 
 const command = new Command('herbal');
 
