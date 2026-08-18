@@ -7,7 +7,7 @@ import * as _ from 'lodash';
 import * as fs from 'fs-extra';
 import * as path from 'node:path';
 import { Forge } from '@open-norantec/forge';
-import requireFromString = require('require-from-string');
+// import requireFromString = require('require-from-string');
 
 const command = new Command('herbal');
 
@@ -26,10 +26,11 @@ const handleGetVirtualEntryFileContent: ConstructorParameters<typeof Forge>[0]['
 ) => {
   return [
     "import 'reflect-metadata';",
-    "import { ModelUtil, NestFactory, isApplication } from '@open-norantec/herbal';",
+    "import { ModelUtil, NestUtil, NestFactory, isApplication } from '@open-norantec/herbal';",
     "import { LoggerService } from '@open-norantec/herbal/dist/modules/logger/logger.service';",
     "import { Worker, isMainThread, workerData } from 'node:worker_threads';",
     `import ENTRY from '${buildEntryFilePath}';`,
+
     '\nasync function bootstrap() {',
     '  if (!isApplication(ENTRY)) {',
     '    console.log(`The entry file must export an application or a function that returns an application.`);',
@@ -37,6 +38,7 @@ const handleGetVirtualEntryFileContent: ConstructorParameters<typeof Forge>[0]['
     '  }',
     '  const entryOptions = ENTRY?.options;',
     '  await entryOptions?.onBeforeBootstrap?.();',
+
     "\n  if (!!workerData?.['__herbal_worker']) {",
     "    entryOptions?.worker?.(workerData?.['__herbal_worker']);",
     '    return;',
@@ -45,6 +47,7 @@ const handleGetVirtualEntryFileContent: ConstructorParameters<typeof Forge>[0]['
     '    ...entryOptions?.factoryOptions,',
     '    bodyParser: false,',
     '  });',
+
     '\n  if (entryOptions?.cors !== false) {',
     '    app.enableCors({',
     "       origin: '*',",
@@ -54,38 +57,69 @@ const handleGetVirtualEntryFileContent: ConstructorParameters<typeof Forge>[0]['
     '       ...(entryOptions?.cors ?? {}),',
     '    });',
     '  }',
+
     '\n  if (Array.isArray(entryOptions?.globalFilters) && entryOptions?.globalFilters?.length > 0) {',
     '    app.useGlobalFilters(...entryOptions?.globalFilters);',
     '  }',
+
     '\n  if (Array.isArray(entryOptions?.globalGuards) && entryOptions?.globalGuards?.length > 0) {',
     '    app.useGlobalGuards(...entryOptions?.globalGuards);',
     '  }',
+
     '\n  if (Array.isArray(entryOptions?.globalInterceptors) && entryOptions?.globalInterceptors?.length > 0) {',
     '    app.useGlobalInterceptors(...entryOptions?.globalInterceptors);',
     '  }',
+
     '\n  if (Array.isArray(entryOptions?.globalPipes) && entryOptions?.globalPipes?.length > 0) {',
     '    app.useGlobalPipes(...entryOptions?.globalPipes);',
     '  }',
+
     '\n  if (!!entryOptions?.websocketAdapter) {',
     '    app.useWebSocketAdapter(entryOptions?.websocketAdapter);',
     '  }',
+
     '\n  if (Array.isArray(entryOptions?.uses)) {',
     '    entryOptions.uses.forEach((middleware) => {',
     '      app.use(middleware);',
     '    });',
     '  }',
+
+    "\n  const openAPIDocumentMap = (Array.isArray(entryOptions?.openAPIGroups) ? Array.from(new Set(entryOptions.openAPIGroups.concat(['default']))) : ['default']).reduce((result, groupId) => {",
+    '      const openAPIDocument = { ...entryOptions?.openAPIObject, paths: {} };',
+    '      NestUtil.getControllerClasses(entryOptions?.Module).forEach((Class) => {',
+    '        if (StringUtil.isFalsyString(Class?.name) || !isHerbalController(Class)) return;',
+    '        const controllerName = getControllerName(Class);',
+    '        const pool = getMethodPool(Class.prototype);',
+    '        if (StringUtil.isFalsyString(controllerName) || pool === null) return;',
+    "        Object.entries(pool.getOpenAPIPathsObject(groupId === 'default' ? undefined : groupId)).forEach(([pathname, schemas]) => {",
+    "          openAPIDocument.paths[['/', entryOptions?.openAPIPrefix ?? '', controllerName, pathname].join('').replace(/^\\/+/g, '/')] = schemas;",
+    '        });',
+    '      });',
+    '      result[groupId] = openAPIDocument;',
+    '      return result;',
+    '    }, {});',
+
+    '\n  try {',
+    "    app.getHttpAdapter().getInstance().get(`${entryOptions?.openAPIPath ?? '/openapi/document'}/:groupId`, (req, res) => {",
+    '      res.json(openAPIDocumentMap[req.params.groupId]);',
+    '    });',
+    '  } finally {}',
+
     '\n  const resolver = (Class) => app.resolve(Class);',
     '  const listenPort = await entryOptions?.getListenPort?.(resolver);',
     '  const loggerService = await app.resolve(LoggerService);',
     '  const finalListenPort = listenPort > 0 ? listenPort : 8080;',
+
     "\n  if (typeof entryOptions?.worker === 'function' && __filename?.toString?.() !== '[worker eval]') {",
     '    new Worker(__filename, { workerData: { __herbal_worker: { port: finalListenPort } } });',
     '  }',
+
     '\n  await app.listen(finalListenPort, () => {',
     '    loggerService.log(`Listening on port: ${finalListenPort}`);',
     '    entryOptions?.callback?.(finalListenPort, app);',
     '  });',
     '}',
+
     '\nbootstrap();',
   ].join('\n');
 };
@@ -160,62 +194,62 @@ command
         onOutputFile: createHandleOutputFile(true),
       }),
     })!,
-  )
-  .addCommand(
-    createCommand('generate-client', ({ addOption }) => {
-      addOption('--group <name>', 'Client group name to generate');
-      return {
-        onLog: log,
-        hiddenOptions: [
-          '--watch',
-          '--execute-after-build',
-          '--obfuscate',
-          '--obfuscator-config-file <string>',
-          '--disable-write-file',
-          '--disable-minify',
-          '--disable-minify-identifiers',
-          '--disable-minify-syntax',
-          '--disable-minify-whitespace',
-        ],
-        defaultOptions: (source, output, options) => ({
-          watch: false,
-          executeAfterBuild: false,
-          obfuscate: false,
-          disableMinify: true,
-          disableMinifyIdentifiers: true,
-          disableMinifySyntax: true,
-          disableMinifyWhitespace: true,
-          getWatcher: handleGetWatcher,
-          onGetFileContent: handleGetFileContent,
-          onOutputFile: createHandleOutputFile(false),
-          getVirtualEntryFileContent: (buildEntryFilePath) => {
-            return [
-              `const entry = require(\'${buildEntryFilePath}\')`,
-              "const { isClient } = require(\'@open-norantec/herbal\')",
-              'module.exports = (context) => {',
-              '  let client = entry;',
-              '  if (!isClient(client)) { client = entry?.default; }',
-              "  if (!isClient(client)) return '';",
-              '  client.instance.createSchema(context?.group);',
-              '  return client.instance.generateClientSourceFile();',
-              '};',
-            ].join('\n');
-          },
-          rewriteOutputFile: async (code) => {
-            try {
-              const generateCodeMethod = requireFromString(code);
-              if (typeof generateCodeMethod !== 'function') return '';
-              return await Promise.resolve(generateCodeMethod({ group: options?.group })).then(
-                (generatedCode) => generatedCode ?? '',
-              );
-            } catch (error: any) {
-              log('error', `Failed to generate client code:`, error?.message);
-              return '';
-            }
-          },
-        }),
-      };
-    })!,
   );
+// .addCommand(
+//   createCommand('generate-client', ({ addOption }) => {
+//     addOption('--group <name>', 'Client group name to generate');
+//     return {
+//       onLog: log,
+//       hiddenOptions: [
+//         '--watch',
+//         '--execute-after-build',
+//         '--obfuscate',
+//         '--obfuscator-config-file <string>',
+//         '--disable-write-file',
+//         '--disable-minify',
+//         '--disable-minify-identifiers',
+//         '--disable-minify-syntax',
+//         '--disable-minify-whitespace',
+//       ],
+//       defaultOptions: (source, output, options) => ({
+//         watch: false,
+//         executeAfterBuild: false,
+//         obfuscate: false,
+//         disableMinify: true,
+//         disableMinifyIdentifiers: true,
+//         disableMinifySyntax: true,
+//         disableMinifyWhitespace: true,
+//         getWatcher: handleGetWatcher,
+//         onGetFileContent: handleGetFileContent,
+//         onOutputFile: createHandleOutputFile(false),
+//         getVirtualEntryFileContent: (buildEntryFilePath) => {
+//           return [
+//             `const entry = require(\'${buildEntryFilePath}\')`,
+//             "const { isClient } = require(\'@open-norantec/herbal\')",
+//             'module.exports = (context) => {',
+//             '  let client = entry;',
+//             '  if (!isClient(client)) { client = entry?.default; }',
+//             "  if (!isClient(client)) return '';",
+//             '  client.instance.createSchema(context?.group);',
+//             '  return client.instance.generateClientSourceFile();',
+//             '};',
+//           ].join('\n');
+//         },
+//         rewriteOutputFile: async (code) => {
+//           try {
+//             const generateCodeMethod = requireFromString(code);
+//             if (typeof generateCodeMethod !== 'function') return '';
+//             return await Promise.resolve(generateCodeMethod({ group: options?.group })).then(
+//               (generatedCode) => generatedCode ?? '',
+//             );
+//           } catch (error: any) {
+//             log('error', `Failed to generate client code:`, error?.message);
+//             return '';
+//           }
+//         },
+//       }),
+//     };
+//   })!,
+// );
 
 command.parse(process.argv);

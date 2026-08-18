@@ -3,7 +3,9 @@ import * as _ from 'lodash';
 import { Constructor } from 'type-fest';
 
 export class NestUtil {
-  public static getControllerClasses(Class: Constructor<any>) {
+  public static getControllerClasses(Class?: Constructor<any>) {
+    if (!Class) return [];
+
     let importedModules: Constructor<any>[] = Reflect.getMetadata('imports', Class);
 
     if (!Array.isArray(importedModules)) {

@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { CorsOptions, CorsOptionsDelegate } from '@nestjs/common/interfaces/external/cors-options.interface';
-import { Constructor } from 'type-fest';
+import { Constructor, PartialDeep } from 'type-fest';
 import {
   CanActivate,
   ExceptionFilter,
@@ -10,6 +10,7 @@ import {
   PipeTransform,
   WebSocketAdapter,
 } from '@nestjs/common';
+import { OpenAPIObject } from 'openapi3-ts/oas31';
 export type Resolver = <T>(Class: Constructor<T>) => Promise<T>;
 
 export interface CreateApplicationOptions {
@@ -20,6 +21,10 @@ export interface CreateApplicationOptions {
   globalGuards?: CanActivate[];
   globalInterceptors?: NestInterceptor[];
   globalPipes?: PipeTransform<any>[];
+  openAPIGroups?: string[];
+  openAPIObject?: PartialDeep<Omit<OpenAPIObject, 'paths'>>;
+  openAPIPath?: string;
+  openAPIPrefix?: string;
   uses?: any[];
   websocketAdapter?: WebSocketAdapter;
   getListenPort: (resolver: Resolver) => number | Promise<number>;

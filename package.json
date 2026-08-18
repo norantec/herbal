@@ -25,7 +25,7 @@
   ],
   "type": "commonjs",
   "bin": {
-    "herbal": "./dist/cli/herbal.js"
+    "herbal": "./bin/cli.js"
   },
   "publishConfig": {
     "access": "public",
