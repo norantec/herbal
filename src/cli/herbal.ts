@@ -11,7 +11,7 @@ import { Forge } from '@open-norantec/forge';
 
 const command = new Command('herbal');
 
-const log = (level: EnumTypes.LogLevel, ...messages: string[]) => {
+const log = (level: EnumTypes['LogLevel'], ...messages: string[]) => {
   console.log(`[${new Date().toISOString()}] -${level}- ${messages?.join?.(' ') ?? ''}`);
   switch (level) {
     case 'error':
