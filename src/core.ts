@@ -58,6 +58,7 @@ export interface MethodRegisterOptions<IS extends z.ZodType<any>, OS extends z.Z
   authAdapters?: Constructor<AuthAdapter>[];
   clientGroups?: ClientGroups | ClienttGroupsFactory;
   disableTransaction?: boolean;
+  operationId?: string;
 }
 
 export type MethodRegisterFn<C> = <IS extends z.ZodType<any>, OS extends z.ZodType<any>>(
@@ -166,6 +167,7 @@ class MethodPool {
 
       result[`/${name}`] = {
         post: {
+          operationId: config?.options?.operationId,
           requestBody: {
             description: 'Request body for method ' + name,
             required: true,
