@@ -27,7 +27,7 @@ export class OpenAPIUtil {
           Object.entries(pool.getOpenAPIPathsObject(groupId === 'default' ? undefined : groupId)).forEach(
             ([pathname, schemas]) => {
               openAPIDocument.paths[
-                ['/', openAPIPrefix ?? '', controllerName, pathname].join('').replace(/^\/+/g, '/')
+                ['/', openAPIPrefix ?? '', controllerName, pathname].join('/').replace(/\/+/g, '/')
               ] = schemas;
             },
           );
