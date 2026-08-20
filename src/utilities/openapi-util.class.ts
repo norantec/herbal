@@ -9,7 +9,6 @@ export class OpenAPIUtil {
     Module,
     groups,
     openAPIObject,
-    openAPIPrefix,
   }: {
     groups?: string[];
     Module?: Constructor<any>;
@@ -26,9 +25,7 @@ export class OpenAPIUtil {
           if (StringUtil.isFalsyString(controllerName) || pool === null) return;
           Object.entries(pool.getOpenAPIPathsObject(groupId === 'default' ? undefined : groupId)).forEach(
             ([pathname, schemas]) => {
-              openAPIDocument.paths[
-                ['/', openAPIPrefix ?? '', controllerName, pathname].join('/').replace(/\/+/g, '/')
-              ] = schemas;
+              openAPIDocument.paths[['/', controllerName, pathname].join('/').replace(/\/+/g, '/')] = schemas;
             },
           );
         });
